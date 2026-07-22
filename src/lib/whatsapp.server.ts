@@ -68,9 +68,23 @@ export async function evoSendMedia(cfg: EvoConfig, number: string, mediaUrl: str
 }
 
 export async function evoSendAudio(cfg: EvoConfig, number: string, audioUrl: string) {
+  // Evolution reencodes to ogg/opus (PTT) when `encoding: true`.
+  // Private storage URLs aren't fetchable server-side by Evolution — download and send as base64.
+  let audioPayload = audioUrl;
+  try {
+    const res = await fetch(audioUrl);
+    if (res.ok) {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+      audioPayload = btoa(bin);
+    }
+  } catch {
+    // fall back to url
+  }
   return evoRequest(cfg, `/message/sendWhatsAppAudio/${cfg.instance}`, {
     method: "POST",
-    body: { number, audio: audioUrl },
+    body: { number, audio: audioPayload, encoding: true },
   });
 }
 
