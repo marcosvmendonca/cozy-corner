@@ -427,6 +427,13 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     reader.readAsDataURL(file);
   }
 
+  async function handleSummarize() {
+    setSummarizing(true);
+    try { await summarizeFn({ data: { conversationId: conv.id } }); qc.invalidateQueries({ queryKey: ["conversations"] }); toast.success("Resumo gerado"); }
+    catch (e: any) { toast.error("IA: " + e.message); }
+    finally { setSummarizing(false); }
+  }
+
   const contactName = conv.contacts?.name || conv.contacts?.phone;
   const initials = (contactName ?? "?").slice(0, 2).toUpperCase();
 
