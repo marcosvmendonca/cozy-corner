@@ -2,13 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3-flash-preview";
+// OpenAI direct integration (self-hosted deployment).
+// Set OPENAI_API_KEY in the server environment.
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
 async function callAI(messages: Array<{ role: string; content: string }>, opts?: { json?: boolean }) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY ausente");
-  const res = await fetch(GATEWAY, {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("OPENAI_API_KEY ausente");
+  const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -70,7 +72,6 @@ export const summarizeConversation = createServerFn({ method: "POST" })
     let parsed: any = {};
     try { parsed = JSON.parse(raw); } catch { parsed = { summary: raw }; }
 
-    // save
     await context.supabase.from("conversations").update({ ai_summary: parsed.summary ?? null }).eq("id", data.conversationId);
     if (parsed.data && (conv as any)?.contacts) {
       const contactId = (await context.supabase.from("conversations").select("contact_id").eq("id", data.conversationId).single()).data?.contact_id;
