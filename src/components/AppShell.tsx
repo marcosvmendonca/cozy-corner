@@ -2,10 +2,12 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
-import { Inbox, GitBranch, Settings, LogOut, MessageCircle, Users } from "lucide-react";
+import { Inbox, GitBranch, Settings, LogOut, MessageCircle, Users, Bell, BellOff } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useNotifications } from "@/hooks/use-notifications";
+import { toast } from "sonner";
 
 const nav = [
   { to: "/inbox", label: "Atendimento", icon: Inbox },
