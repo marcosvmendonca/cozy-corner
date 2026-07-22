@@ -185,6 +185,16 @@ function IntegrationSettings() {
             Configurar webhook automaticamente
           </Button>
         </div>
+
+        <div className="mt-6 border-t pt-4">
+          <Label className="text-xs">Importar contatos do aparelho</Label>
+          <p className="mt-1 text-[11px] text-muted-foreground">Traz a lista de contatos do WhatsApp conectado (sem histórico de mensagens).</p>
+          <Button variant="outline" size="sm" className="mt-2 w-full" onClick={importContacts} disabled={loading === "import"}>
+            {loading === "import" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            Importar contatos agora
+          </Button>
+        </div>
+
       </motion.div>
     </div>
   );
