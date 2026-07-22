@@ -19,6 +19,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedFlowsIndexRouteImport } from './routes/_authenticated.flows.index'
 import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated.settings.team'
 import { Route as AuthenticatedSettingsQuickRepliesRouteImport } from './routes/_authenticated.settings.quick-replies'
+import { Route as AuthenticatedSettingsQueuesRouteImport } from './routes/_authenticated.settings.queues'
 import { Route as AuthenticatedSettingsIntegrationRouteImport } from './routes/_authenticated.settings.integration'
 import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated.settings.ai'
 import { Route as AuthenticatedFlowsFlowIdRouteImport } from './routes/_authenticated.flows.$flowId'
@@ -76,6 +77,12 @@ const AuthenticatedSettingsQuickRepliesRoute =
     path: '/quick-replies',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
+const AuthenticatedSettingsQueuesRoute =
+  AuthenticatedSettingsQueuesRouteImport.update({
+    id: '/queues',
+    path: '/queues',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedSettingsIntegrationRoute =
   AuthenticatedSettingsIntegrationRouteImport.update({
     id: '/integration',
@@ -109,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/flows/$flowId': typeof AuthenticatedFlowsFlowIdRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/integration': typeof AuthenticatedSettingsIntegrationRoute
+  '/settings/queues': typeof AuthenticatedSettingsQueuesRoute
   '/settings/quick-replies': typeof AuthenticatedSettingsQuickRepliesRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/flows/': typeof AuthenticatedFlowsIndexRoute
@@ -123,6 +131,7 @@ export interface FileRoutesByTo {
   '/flows/$flowId': typeof AuthenticatedFlowsFlowIdRoute
   '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/integration': typeof AuthenticatedSettingsIntegrationRoute
+  '/settings/queues': typeof AuthenticatedSettingsQueuesRoute
   '/settings/quick-replies': typeof AuthenticatedSettingsQuickRepliesRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/flows': typeof AuthenticatedFlowsIndexRoute
@@ -140,6 +149,7 @@ export interface FileRoutesById {
   '/_authenticated/flows/$flowId': typeof AuthenticatedFlowsFlowIdRoute
   '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/_authenticated/settings/integration': typeof AuthenticatedSettingsIntegrationRoute
+  '/_authenticated/settings/queues': typeof AuthenticatedSettingsQueuesRoute
   '/_authenticated/settings/quick-replies': typeof AuthenticatedSettingsQuickRepliesRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/_authenticated/flows/': typeof AuthenticatedFlowsIndexRoute
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/flows/$flowId'
     | '/settings/ai'
     | '/settings/integration'
+    | '/settings/queues'
     | '/settings/quick-replies'
     | '/settings/team'
     | '/flows/'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/flows/$flowId'
     | '/settings/ai'
     | '/settings/integration'
+    | '/settings/queues'
     | '/settings/quick-replies'
     | '/settings/team'
     | '/flows'
@@ -187,6 +199,7 @@ export interface FileRouteTypes {
     | '/_authenticated/flows/$flowId'
     | '/_authenticated/settings/ai'
     | '/_authenticated/settings/integration'
+    | '/_authenticated/settings/queues'
     | '/_authenticated/settings/quick-replies'
     | '/_authenticated/settings/team'
     | '/_authenticated/flows/'
@@ -273,6 +286,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsQuickRepliesRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
+    '/_authenticated/settings/queues': {
+      id: '/_authenticated/settings/queues'
+      path: '/queues'
+      fullPath: '/settings/queues'
+      preLoaderRoute: typeof AuthenticatedSettingsQueuesRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/settings/integration': {
       id: '/_authenticated/settings/integration'
       path: '/integration'
@@ -307,6 +327,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsIntegrationRoute: typeof AuthenticatedSettingsIntegrationRoute
+  AuthenticatedSettingsQueuesRoute: typeof AuthenticatedSettingsQueuesRoute
   AuthenticatedSettingsQuickRepliesRoute: typeof AuthenticatedSettingsQuickRepliesRoute
   AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
@@ -315,6 +336,7 @@ interface AuthenticatedSettingsRouteChildren {
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
   AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
   AuthenticatedSettingsIntegrationRoute: AuthenticatedSettingsIntegrationRoute,
+  AuthenticatedSettingsQueuesRoute: AuthenticatedSettingsQueuesRoute,
   AuthenticatedSettingsQuickRepliesRoute:
     AuthenticatedSettingsQuickRepliesRoute,
   AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
