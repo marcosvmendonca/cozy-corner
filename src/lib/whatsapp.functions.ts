@@ -139,7 +139,7 @@ export const uploadMedia = createServerFn({ method: "POST" })
     dataUrl: z.string(), // data:<mime>;base64,<...>
   }).parse(input))
   .handler(async ({ context, data }) => {
-    const match = data.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    const match = data.dataUrl.match(/^data:([^,]*?);base64,(.+)$/);
     if (!match) throw new Error("Formato inválido");
     const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
     const path = `agents/${context.userId}/${Date.now()}-${data.filename}`;
