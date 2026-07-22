@@ -20,8 +20,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const [profile, setProfile] = useState<{ name: string; email: string } | null>(null);
+  const { permission, requestPermission, enabled, setEnabled, unread } = useNotifications();
 
-  useEffect(() => {
+  async function toggleNotifications() {
+    if (!enabled) {
+      if (permission !== "granted") {
+        const p = await requestPermission();
+        if (p !== "granted") toast.info("Notificações no navegador bloqueadas — usaremos apenas o som e o toast.");
+      }
+      setEnabled(true);
+      toast.success("Notificações ativadas");
+    } else {
+      setEnabled(false);
+      toast("Notificações silenciadas");
+    }
+  }
+
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setProfile({
