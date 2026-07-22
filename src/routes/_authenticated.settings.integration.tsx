@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSettings, updateSetting } from "@/lib/settings.functions";
 import { getWhatsAppQR, getWhatsAppStatus, registerWebhook } from "@/lib/whatsapp.functions";
-import { importContactsFromWhatsApp } from "@/lib/contacts.functions";
-import { Loader2, QrCode, CheckCircle2, XCircle, RefreshCw, Copy, Download } from "lucide-react";
+import { importContactsFromWhatsApp, importHistoryFromWhatsApp } from "@/lib/contacts.functions";
+import { Loader2, QrCode, CheckCircle2, XCircle, RefreshCw, Copy, Download, History } from "lucide-react";
 
 
 export const Route = createFileRoute("/_authenticated/settings/integration")({
