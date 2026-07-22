@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
@@ -660,6 +661,7 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
   const [draft, setDraft] = useState(m.body ?? "");
   const [forwardOpen, setForwardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const deleted = !!(m as any).deleted_at;
   const edited = !!(m as any).edited_at;
@@ -668,9 +670,12 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
   const canDelete = out && !deleted;
 
   async function handleDelete() {
-    if (!confirm("Apagar esta mensagem para todos?")) return;
     setBusy(true);
-    try { await deleteFn({ data: { messageId: m.id } }); qc.invalidateQueries({ queryKey: ["messages", currentConversationId] }); }
+    try {
+      await deleteFn({ data: { messageId: m.id } });
+      qc.invalidateQueries({ queryKey: ["messages", currentConversationId] });
+      setConfirmDelete(false);
+    }
     catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
   }
@@ -691,7 +696,7 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
       {out && !deleted && (
         <MessageActions
           onEdit={canEdit ? () => { setDraft(m.body ?? ""); setEditing(true); } : undefined}
-          onDelete={canDelete ? handleDelete : undefined}
+          onDelete={canDelete ? () => setConfirmDelete(true) : undefined}
           onForward={() => setForwardOpen(true)}
           busy={busy}
         />
@@ -753,6 +758,26 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           onOpenChange={setForwardOpen}
         />
       )}
+      <AlertDialog open={confirmDelete} onOpenChange={(o) => !busy && setConfirmDelete(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar mensagem?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação apaga a mensagem para todos no WhatsApp. Não é possível desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Apagando...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Apagar</>)}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }
