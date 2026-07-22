@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
@@ -714,7 +715,18 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           </div>
         )}
         {deleted ? (
-          <div className="flex items-center gap-1.5 text-xs"><Trash2 className="h-3 w-3" /> Mensagem apagada</div>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 text-xs cursor-help">
+                  <Trash2 className="h-3 w-3" /> Mensagem apagada
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Mensagem apagada{(m as any).deleted_at ? ` em ${new Date((m as any).deleted_at).toLocaleString("pt-BR")}` : ""}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : editing ? (
           <div className="flex flex-col gap-1.5">
             <Textarea
