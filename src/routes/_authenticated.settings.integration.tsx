@@ -26,6 +26,7 @@ function IntegrationSettings() {
   const statusFn = useServerFn(getWhatsAppStatus);
   const webhookFn = useServerFn(registerWebhook);
   const importFn = useServerFn(importContactsFromWhatsApp);
+  const importHistoryFn = useServerFn(importHistoryFromWhatsApp);
 
 
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: () => getFn() });
