@@ -36,6 +36,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
+  useEffect(() => {
+
+
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setProfile({
