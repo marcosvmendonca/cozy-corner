@@ -95,3 +95,17 @@ export async function evoFindContacts(cfg: EvoConfig) {
   });
 }
 
+
+export async function evoFindMessages(cfg: EvoConfig, body: Record<string, unknown> = {}) {
+  return evoRequest(cfg, `/chat/findMessages/${cfg.instance}`, {
+    method: "POST",
+    body,
+  });
+}
+
+export async function evoFindChats(cfg: EvoConfig) {
+  return evoRequest(cfg, `/chat/findChats/${cfg.instance}`, {
+    method: "POST",
+    body: {},
+  });
+}

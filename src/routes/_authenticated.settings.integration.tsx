@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSettings, updateSetting } from "@/lib/settings.functions";
 import { getWhatsAppQR, getWhatsAppStatus, registerWebhook } from "@/lib/whatsapp.functions";
-import { importContactsFromWhatsApp } from "@/lib/contacts.functions";
-import { Loader2, QrCode, CheckCircle2, XCircle, RefreshCw, Copy, Download } from "lucide-react";
+import { importContactsFromWhatsApp, importHistoryFromWhatsApp } from "@/lib/contacts.functions";
+import { Loader2, QrCode, CheckCircle2, XCircle, RefreshCw, Copy, Download, History } from "lucide-react";
 
 
 export const Route = createFileRoute("/_authenticated/settings/integration")({
@@ -26,6 +26,7 @@ function IntegrationSettings() {
   const statusFn = useServerFn(getWhatsAppStatus);
   const webhookFn = useServerFn(registerWebhook);
   const importFn = useServerFn(importContactsFromWhatsApp);
+  const importHistoryFn = useServerFn(importHistoryFromWhatsApp);
 
 
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: () => getFn() });
@@ -37,7 +38,9 @@ function IntegrationSettings() {
   const [qr, setQr] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [statusState, setStatusState] = useState<string | null>(null);
-  const [loading, setLoading] = useState<null | "save" | "qr" | "status" | "hook" | "import">(null);
+  const [loading, setLoading] = useState<null | "save" | "qr" | "status" | "hook" | "import" | "history">(null);
+  const [historyDays, setHistoryDays] = useState(30);
+  const [historyIncludeMe, setHistoryIncludeMe] = useState(true);
 
   // Evolution API precisa de uma URL estável e acessível sem autenticação.
   // O host de sandbox (`*.lovableproject.com` / `id-preview--*`) redireciona por auth-bridge
@@ -103,6 +106,15 @@ function IntegrationSettings() {
     try {
       const r = await importFn();
       toast.success(`Importados: ${r.imported} · atualizados: ${r.updated} · ignorados: ${r.skipped}`);
+    } catch (e: any) { toast.error(e.message); } finally { setLoading(null); }
+  }
+
+  async function importHistory() {
+    setLoading("history");
+    try {
+      const r = await importHistoryFn({ data: { days: historyDays, limit: 2000, includeFromMe: historyIncludeMe } });
+      toast.success(`${r.messages} mensagens · ${r.conversations} conversas · ${r.contacts} contatos novos`);
+      qc.invalidateQueries();
     } catch (e: any) { toast.error(e.message); } finally { setLoading(null); }
   }
 
@@ -194,6 +206,51 @@ function IntegrationSettings() {
             Importar contatos agora
           </Button>
         </div>
+
+        <div className="mt-6 border-t pt-4">
+          <Label className="text-xs">Importar histórico de mensagens</Label>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Puxa mensagens do aparelho conectado e cria tickets/conversas automaticamente. Escolha o período.
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Últimos dias</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={historyDays}
+                onChange={(e) => setHistoryDays(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Incluir enviadas</Label>
+              <select
+                value={historyIncludeMe ? "yes" : "no"}
+                onChange={(e) => setHistoryIncludeMe(e.target.value === "yes")}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="yes">Sim (agente + cliente)</option>
+                <option value="no">Só do cliente</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {[7, 15, 30, 60, 90].map((d) => (
+              <Button key={d} type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setHistoryDays(d)}>
+                {d}d
+              </Button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" className="mt-2 w-full" onClick={importHistory} disabled={loading === "history"}>
+            {loading === "history" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <History className="mr-2 h-4 w-4" />}
+            Importar histórico ({historyDays} dias)
+          </Button>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Pode demorar alguns minutos dependendo do volume. Mensagens duplicadas são ignoradas.
+          </p>
+        </div>
+
 
       </motion.div>
     </div>
