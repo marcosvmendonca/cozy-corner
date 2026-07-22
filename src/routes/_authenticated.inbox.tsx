@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { sendMessage, uploadMedia } from "@/lib/whatsapp.functions";
+import { sendMessage, uploadMedia, deleteMessage, editMessage, forwardMessage } from "@/lib/whatsapp.functions";
 import { suggestReply, summarizeConversation } from "@/lib/ai.functions";
 import { startConversation } from "@/lib/contacts.functions";
 import { acceptTicket, transferTicket, setTicketStatus, suggestQueueForTicket } from "@/lib/tickets.functions";
