@@ -757,6 +757,26 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           onOpenChange={setForwardOpen}
         />
       )}
+      <AlertDialog open={confirmDelete} onOpenChange={(o) => !busy && setConfirmDelete(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar mensagem?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação apaga a mensagem para todos no WhatsApp. Não é possível desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Apagando...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Apagar</>)}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }
