@@ -8,17 +8,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { sendMessage, uploadMedia } from "@/lib/whatsapp.functions";
 import { suggestReply, summarizeConversation } from "@/lib/ai.functions";
 import { startConversation } from "@/lib/contacts.functions";
+import { acceptTicket, transferTicket, setTicketStatus, suggestQueueForTicket } from "@/lib/tickets.functions";
+import { listQueues } from "@/lib/queues.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap,
   MessageSquare, Loader2, User as UserIcon, PhoneCall, FileText,
+  Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
@@ -40,14 +44,43 @@ export const Route = createFileRoute("/_authenticated/inbox")({
   component: InboxPage,
 });
 
+type Tab = "waiting" | "mine" | "all";
+
 function InboxPage() {
   const { c: selectedId } = Route.useSearch();
   const navigate = useNavigate({ from: "/inbox" });
   const qc = useQueryClient();
 
   const [filter, setFilter] = useState("");
+  const [tab, setTab] = useState<Tab>("waiting");
+  const [queueFilter, setQueueFilter] = useState<string>("all");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
 
-  // Realtime list
+  // Current user + admin
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return null;
+      const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", u.user.id).maybeSingle();
+      return { id: u.user.id, email: u.user.email, isAdmin: role?.role === "admin" };
+    },
+  });
+
+  // Queues (visible to user)
+  const listQueuesFn = useServerFn(listQueues);
+  const { data: queues = [] } = useQuery({ queryKey: ["queues"], queryFn: () => listQueuesFn() });
+
+  // Agents (for admin filter)
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents"],
+    enabled: !!me?.isAdmin,
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("id, full_name, email");
+      return data ?? [];
+    },
+  });
+
   const { data: conversations = [] } = useQuery({
     queryKey: ["conversations"],
     queryFn: async (): Promise<Conversation[]> => {
@@ -55,7 +88,7 @@ function InboxPage() {
         .from("conversations")
         .select("*, contacts(*)")
         .order("last_message_at", { ascending: false, nullsFirst: false })
-        .limit(200);
+        .limit(300);
       if (error) throw error;
       return (data ?? []) as any;
     },
@@ -77,63 +110,122 @@ function InboxPage() {
 
   const filtered = useMemo(() => {
     const f = filter.trim().toLowerCase();
-    if (!f) return conversations;
-    return conversations.filter((c) =>
-      (c.contacts?.name ?? "").toLowerCase().includes(f) ||
-      c.contacts?.phone?.includes(f) ||
-      (c.last_message_preview ?? "").toLowerCase().includes(f),
-    );
-  }, [conversations, filter]);
+    return conversations.filter((c) => {
+      // tab
+      if (tab === "waiting" && c.status !== "waiting") return false;
+      if (tab === "mine" && c.assigned_agent_id !== me?.id) return false;
+      // "all" needs no status filter
+
+      // queue
+      if (queueFilter !== "all") {
+        if (queueFilter === "none" && c.queue_id) return false;
+        if (queueFilter !== "none" && c.queue_id !== queueFilter) return false;
+      }
+      // agent (admin)
+      if (me?.isAdmin && agentFilter !== "all") {
+        if (agentFilter === "none" && c.assigned_agent_id) return false;
+        if (agentFilter !== "none" && c.assigned_agent_id !== agentFilter) return false;
+      }
+      // search
+      if (f) {
+        const hay = `${c.contacts?.name ?? ""} ${c.contacts?.phone ?? ""} ${c.last_message_preview ?? ""}`.toLowerCase();
+        if (!hay.includes(f)) return false;
+      }
+      return true;
+    });
+  }, [conversations, filter, tab, queueFilter, agentFilter, me]);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
-  const openCount = conversations.filter((c) => c.status === "open").length;
   const waitingCount = conversations.filter((c) => c.status === "waiting").length;
+  const mineCount = conversations.filter((c) => c.assigned_agent_id === me?.id && c.status !== "resolved").length;
+
+  const queueMap = useMemo(() => new Map(queues.map((q) => [q.id, q])), [queues]);
+  const agentMap = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
 
   return (
     <div className="h-full w-full overflow-hidden bg-background p-3 md:p-4">
-      <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-[340px_minmax(0,1fr)_320px] md:gap-4">
-        {/* LEFT: Conversation list */}
-        <motion.div
-          layout
-          className="bento-card flex min-h-0 flex-col"
-        >
+      <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-[360px_minmax(0,1fr)_320px] md:gap-4">
+        {/* LEFT */}
+        <motion.div layout className="bento-card flex min-h-0 flex-col">
           <div className="flex items-center justify-between p-4 pb-3">
             <div>
               <h2 className="text-sm font-semibold tracking-tight">Conversas</h2>
-              <div className="mt-1 flex gap-2 text-[10px]">
-                <Badge variant="secondary" className="rounded-full">
-                  <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-brand" />
-                  {openCount} abertas
-                </Badge>
-                <Badge variant="outline" className="rounded-full">{waitingCount} aguardando</Badge>
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                {waitingCount} aguardando · {mineCount} minhas
               </div>
             </div>
             <NewConversationDialog onCreated={(id) => navigate({ search: { c: id } })} />
           </div>
-          <div className="px-4 pb-3">
+
+          {/* Tabs */}
+          <div className="mx-3 mb-2 flex gap-1 rounded-xl border bg-surface p-1 text-xs">
+            {([
+              { k: "waiting", l: "Aguardando", i: HandshakeIcon },
+              { k: "mine", l: "Minhas", i: UserIcon },
+              { k: "all", l: me?.isAdmin ? "Todas" : "Filas", i: InboxIcon },
+            ] as const).map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setTab(t.k)}
+                className={cn(
+                  "relative flex-1 rounded-lg px-2 py-1.5 font-medium transition",
+                  tab === t.k ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tab === t.k && <motion.div layoutId="tab-active" className="absolute inset-0 rounded-lg bg-accent" transition={{ type: "spring", bounce: 0.2, duration: 0.4 }} />}
+                <span className="relative flex items-center justify-center gap-1"><t.i className="h-3 w-3" />{t.l}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Filters */}
+          <div className="mx-3 mb-2 grid gap-2">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar contato..."
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="pl-9"
-              />
+              <Input placeholder="Buscar contato..." value={filter} onChange={(e) => setFilter(e.target.value)} className="pl-9 h-9" />
             </div>
+            {(queues.length > 0 || me?.isAdmin) && (
+              <div className={cn("grid gap-2", me?.isAdmin ? "grid-cols-2" : "grid-cols-1")}>
+                {queues.length > 0 && (
+                  <Select value={queueFilter} onValueChange={setQueueFilter}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Fila" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as filas</SelectItem>
+                      <SelectItem value="none">Sem fila</SelectItem>
+                      {queues.map((q) => <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {me?.isAdmin && (
+                  <Select value={agentFilter} onValueChange={setAgentFilter}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Atendente" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos atendentes</SelectItem>
+                      <SelectItem value="none">Sem atendente</SelectItem>
+                      {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name ?? a.email}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
           </div>
+
           <ScrollArea className="flex-1">
             <div className="flex flex-col gap-1 px-2 pb-2">
               {filtered.length === 0 && (
                 <div className="px-3 py-10 text-center text-sm text-muted-foreground">
                   <MessageSquare className="mx-auto mb-2 h-6 w-6 opacity-40" />
-                  Nenhuma conversa ainda.
+                  Nenhuma conversa neste filtro.
                 </div>
               )}
               {filtered.map((c) => (
                 <ConversationItem
                   key={c.id}
                   conv={c}
+                  queue={c.queue_id ? queueMap.get(c.queue_id) : undefined}
+                  agent={c.assigned_agent_id ? agentMap.get(c.assigned_agent_id) : undefined}
+                  isMine={c.assigned_agent_id === me?.id}
                   active={c.id === selectedId}
                   onClick={() => navigate({ search: { c: c.id } })}
                 />
@@ -142,37 +234,45 @@ function InboxPage() {
           </ScrollArea>
         </motion.div>
 
-        {/* CENTER: Chat */}
+        {/* CENTER */}
         <motion.div layout className="bento-card flex min-h-0 flex-col">
           {selected ? (
-            <ChatThread conv={selected} />
+            <ChatThread conv={selected} me={me} queues={queues} />
           ) : (
             <EmptyState />
           )}
         </motion.div>
 
-        {/* RIGHT: Context panel */}
+        {/* RIGHT */}
         <motion.div layout className="hidden min-h-0 md:flex">
-          <ContextPanel conv={selected} />
+          <ContextPanel conv={selected} queues={queues} agents={agents} isAdmin={!!me?.isAdmin} />
         </motion.div>
       </div>
     </div>
   );
 }
 
-function ConversationItem({ conv, active, onClick }: { conv: Conversation; active: boolean; onClick: () => void }) {
+function ConversationItem({ conv, queue, agent, isMine, active, onClick }: {
+  conv: Conversation;
+  queue?: { name: string; color: string };
+  agent?: { full_name: string | null; email: string | null };
+  isMine: boolean;
+  active: boolean;
+  onClick: () => void;
+}) {
   const name = conv.contacts?.name || conv.contacts?.phone;
   const initials = (name ?? "?").slice(0, 2).toUpperCase();
+  const waiting = conv.status === "waiting";
   return (
     <button
       onClick={onClick}
       className={cn(
-        "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all",
+        "group flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all",
         active ? "bg-accent" : "hover:bg-muted",
       )}
     >
       <Avatar className="h-10 w-10 shrink-0">
-        <AvatarFallback className="bg-brand text-brand-foreground text-xs font-semibold">
+        <AvatarFallback className={cn("text-xs font-semibold", waiting ? "bg-amber-500/20 text-amber-700" : "bg-brand text-brand-foreground")}>
           {initials}
         </AvatarFallback>
       </Avatar>
@@ -183,9 +283,19 @@ function ConversationItem({ conv, active, onClick }: { conv: Conversation; activ
             {conv.last_message_at ? new Date(conv.last_message_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
           </div>
         </div>
-        <div className="mt-0.5 flex items-center gap-2">
+        <div className="mt-0.5 flex items-center gap-1.5">
           <div className="truncate text-xs text-muted-foreground">{conv.last_message_preview ?? "Sem mensagens"}</div>
           {conv.ai_enabled && <Sparkles className="h-3 w-3 shrink-0 text-brand" />}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {waiting && <Badge variant="outline" className="h-4 rounded-full border-amber-400 px-1.5 text-[9px] text-amber-700">Aguardando</Badge>}
+          {queue && (
+            <Badge variant="outline" className="h-4 rounded-full px-1.5 text-[9px]" style={{ borderColor: queue.color, color: queue.color }}>
+              {queue.name}
+            </Badge>
+          )}
+          {isMine && <Badge className="h-4 rounded-full bg-brand/15 px-1.5 text-[9px] text-brand hover:bg-brand/20">Você</Badge>}
+          {agent && !isMine && <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[9px]">{(agent.full_name ?? agent.email ?? "").split(" ")[0]}</Badge>}
         </div>
       </div>
     </button>
@@ -202,13 +312,17 @@ function EmptyState() {
         Selecione uma conversa
       </h3>
       <p className="max-w-sm text-sm text-muted-foreground">
-        Escolha um contato ao lado ou inicie uma nova conversa. A IA sugere respostas em tempo real.
+        Aceite um ticket em Aguardando para começar. A IA pode sugerir a fila.
       </p>
     </div>
   );
 }
 
-function ChatThread({ conv }: { conv: Conversation }) {
+function ChatThread({ conv, me, queues }: {
+  conv: Conversation;
+  me: { id: string; isAdmin: boolean } | null | undefined;
+  queues: Array<{ id: string; name: string; color: string }>;
+}) {
   const qc = useQueryClient();
   const sendFn = useServerFn(sendMessage);
   const uploadFn = useServerFn(uploadMedia);
@@ -249,22 +363,14 @@ function ChatThread({ conv }: { conv: Conversation }) {
     setText("");
     sendMut.mutate({ text: t });
   }
-
   async function handleSuggest() {
     setSuggesting(true);
-    try {
-      const r = await suggestFn({ data: { conversationId: conv.id } });
-      setText(r.text);
-    } catch (e: any) {
-      toast.error("IA: " + e.message);
-    } finally {
-      setSuggesting(false);
-    }
+    try { const r = await suggestFn({ data: { conversationId: conv.id } }); setText(r.text); }
+    catch (e: any) { toast.error("IA: " + e.message); }
+    finally { setSuggesting(false); }
   }
-
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+    const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async () => {
@@ -273,9 +379,7 @@ function ChatThread({ conv }: { conv: Conversation }) {
         const up = await uploadFn({ data: { filename: file.name, contentType: file.type, dataUrl } });
         const mediaType = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document";
         sendMut.mutate({ mediaUrl: up.url, mediaType: mediaType as any, fileName: file.name });
-      } catch (err: any) {
-        toast.error("Upload: " + err.message);
-      }
+      } catch (err: any) { toast.error("Upload: " + err.message); }
     };
     reader.readAsDataURL(file);
   }
@@ -283,33 +387,51 @@ function ChatThread({ conv }: { conv: Conversation }) {
   const contactName = conv.contacts?.name || conv.contacts?.phone;
   const initials = (contactName ?? "?").slice(0, 2).toUpperCase();
 
+  const isMine = conv.assigned_agent_id === me?.id;
+  const canSend = isMine || me?.isAdmin || (conv.queue_id != null); // policy allows; UI just hints
+  const waiting = conv.status === "waiting";
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* header */}
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <Avatar className="h-10 w-10">
           <AvatarFallback className="bg-brand text-brand-foreground text-xs font-semibold">{initials}</AvatarFallback>
         </Avatar>
-        <div className="flex-1">
-          <div className="text-sm font-semibold">{contactName}</div>
-          <div className="text-[11px] text-muted-foreground">{conv.contacts?.phone}</div>
+        <div className="flex-1 min-w-0">
+          <div className="truncate text-sm font-semibold">{contactName}</div>
+          <div className="truncate text-[11px] text-muted-foreground">{conv.contacts?.phone}</div>
         </div>
+        {conv.status === "resolved" && <Badge variant="secondary" className="rounded-full">Resolvido</Badge>}
         <Badge variant={conv.ai_enabled ? "default" : "outline"} className="rounded-full">
-          {conv.ai_enabled ? <><Sparkles className="mr-1 h-3 w-3" /> IA ativa</> : "Manual"}
+          {conv.ai_enabled ? <><Sparkles className="mr-1 h-3 w-3" /> IA</> : "Manual"}
         </Badge>
       </div>
 
-      {/* messages */}
+      {/* Accept banner */}
+      {waiting && (
+        <div className="border-b bg-amber-500/10 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <HandshakeIcon className="h-4 w-4 text-amber-700" />
+            <div className="flex-1 text-xs text-amber-900">
+              Ticket aguardando atendimento. Aceite para se tornar o responsável e direcionar para uma fila.
+            </div>
+            <AcceptTicketButton conversationId={conv.id} queues={queues} />
+          </div>
+        </div>
+      )}
+
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-gradient-to-b from-transparent to-muted/30 px-4 py-4">
         <AnimatePresence initial={false}>
-          {messages.map((m) => (
-            <MessageBubble key={m.id} m={m} />
-          ))}
+          {messages.map((m) => (<MessageBubble key={m.id} m={m} />))}
         </AnimatePresence>
       </div>
 
-      {/* composer */}
       <div className="border-t p-3">
+        {!canSend && !waiting && (
+          <div className="mb-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+            Somente o responsável ou membros da fila podem responder.
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <label className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl text-muted-foreground hover:bg-muted">
             <Paperclip className="h-4 w-4" />
@@ -324,14 +446,15 @@ function ChatThread({ conv }: { conv: Conversation }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="Digite uma mensagem..."
+            placeholder={waiting ? "Aceite o ticket para responder..." : "Digite uma mensagem..."}
             className="min-h-[40px] flex-1 resize-none"
             rows={1}
+            disabled={waiting}
           />
-          <Button variant="outline" size="icon" onClick={handleSuggest} disabled={suggesting} title="Sugestão da IA">
+          <Button variant="outline" size="icon" onClick={handleSuggest} disabled={suggesting || waiting} title="Sugestão da IA">
             {suggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           </Button>
-          <Button onClick={handleSend} disabled={sendMut.isPending || !text.trim()} size="icon">
+          <Button onClick={handleSend} disabled={sendMut.isPending || !text.trim() || waiting} size="icon">
             {sendMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
@@ -340,36 +463,108 @@ function ChatThread({ conv }: { conv: Conversation }) {
   );
 }
 
+function AcceptTicketButton({ conversationId, queues }: {
+  conversationId: string;
+  queues: Array<{ id: string; name: string; color: string }>;
+}) {
+  const qc = useQueryClient();
+  const acceptFn = useServerFn(acceptTicket);
+  const suggestFn = useServerFn(suggestQueueForTicket);
+  const [open, setOpen] = useState(false);
+  const [queueId, setQueueId] = useState<string>("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestReason, setSuggestReason] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function iaSuggest() {
+    setSuggesting(true); setSuggestReason(null);
+    try {
+      const r = await suggestFn({ data: { conversationId } });
+      if (r.queueId) { setQueueId(r.queueId); setSuggestReason(r.reason || `Sugerida: ${r.queueName}`); }
+      else setSuggestReason(r.reason || "IA não conseguiu escolher");
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSuggesting(false); }
+  }
+  async function confirm() {
+    if (!queueId) return toast.error("Escolha uma fila");
+    setBusy(true);
+    try {
+      await acceptFn({ data: { conversationId, queueId } });
+      toast.success("Ticket aceito");
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+      setOpen(false);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="h-7">Aceitar ticket</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Aceitar ticket</DialogTitle>
+          <DialogDescription>Você vira o responsável e escolhe a fila que o ticket vai seguir.</DialogDescription>
+        </DialogHeader>
+        {queues.length === 0 ? (
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+            Nenhuma fila disponível. Crie uma em <Link to="/settings/queues" className="text-brand underline">Configurações → Filas</Link>.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Fila</label>
+              <Select value={queueId} onValueChange={setQueueId}>
+                <SelectTrigger><SelectValue placeholder="Escolher fila..." /></SelectTrigger>
+                <SelectContent>
+                  {queues.map((q) => (
+                    <SelectItem key={q.id} value={q.id}>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: q.color }} /> {q.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" size="sm" onClick={iaSuggest} disabled={suggesting} className="w-full">
+              {suggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              Deixar a IA sugerir a fila
+            </Button>
+            {suggestReason && <div className="rounded-lg border bg-brand-soft/40 px-3 py-2 text-xs">{suggestReason}</div>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button onClick={confirm} disabled={busy || !queueId || queues.length === 0}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Aceitar e assumir"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MessageBubble({ m }: { m: Message }) {
   const out = m.direction === "out";
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
       className={cn("flex", out ? "justify-end" : "justify-start")}
     >
-      <div
-        className={cn(
-          "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
-          out ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface",
-          m.sent_by === "ai" && "ring-1 ring-brand/40",
-        )}
-      >
+      <div className={cn(
+        "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+        out ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface",
+        m.sent_by === "ai" && "ring-1 ring-brand/40",
+      )}>
         {m.sent_by === "ai" && (
           <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wider opacity-70">
             <Sparkles className="h-3 w-3" /> IA
           </div>
         )}
-        {m.type === "image" && m.media_url && (
-          <img src={m.media_url} alt="" className="mb-1 max-h-64 rounded-lg" />
-        )}
-        {m.type === "audio" && m.media_url && (
-          <audio src={m.media_url} controls className="mb-1 max-w-full" />
-        )}
-        {m.type === "video" && m.media_url && (
-          <video src={m.media_url} controls className="mb-1 max-h-64 rounded-lg" />
-        )}
+        {m.type === "image" && m.media_url && <img src={m.media_url} alt="" className="mb-1 max-h-64 rounded-lg" />}
+        {m.type === "audio" && m.media_url && <audio src={m.media_url} controls className="mb-1 max-w-full" />}
+        {m.type === "video" && m.media_url && <video src={m.media_url} controls className="mb-1 max-h-64 rounded-lg" />}
         {m.type === "document" && m.media_url && (
           <a href={m.media_url} target="_blank" rel="noreferrer" className="mb-1 flex items-center gap-2 rounded-lg bg-black/10 p-2 text-xs">
             <FileText className="h-4 w-4" /> Documento
@@ -389,7 +584,6 @@ function AudioRecorder({ onRecorded }: { onRecorded: (dataUrl: string, mime: str
   const [recording, setRecording] = useState(false);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<BlobPart[]>([]);
-
   async function start() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -404,42 +598,32 @@ function AudioRecorder({ onRecorded }: { onRecorded: (dataUrl: string, mime: str
         reader.onload = () => onRecorded(reader.result as string, mime);
         reader.readAsDataURL(blob);
       };
-      mr.start();
-      recRef.current = mr;
-      setRecording(true);
-    } catch (e: any) {
-      toast.error("Microfone: " + e.message);
-    }
+      mr.start(); recRef.current = mr; setRecording(true);
+    } catch (e: any) { toast.error("Microfone: " + e.message); }
   }
-  function stop() {
-    recRef.current?.stop();
-    setRecording(false);
-  }
-
+  function stop() { recRef.current?.stop(); setRecording(false); }
   return (
-    <Button
-      type="button"
-      variant={recording ? "destructive" : "outline"}
-      size="icon"
-      onClick={recording ? stop : start}
-      title={recording ? "Parar gravação" : "Gravar áudio"}
-    >
+    <Button type="button" variant={recording ? "destructive" : "outline"} size="icon" onClick={recording ? stop : start} title={recording ? "Parar" : "Gravar"}>
       {recording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
     </Button>
   );
 }
 
-function ContextPanel({ conv }: { conv: Conversation | null }) {
+function ContextPanel({ conv, queues, agents, isAdmin }: {
+  conv: Conversation | null;
+  queues: Array<{ id: string; name: string; color: string }>;
+  agents: Array<{ id: string; full_name: string | null; email: string | null }>;
+  isAdmin: boolean;
+}) {
   const qc = useQueryClient();
   const summarizeFn = useServerFn(summarizeConversation);
+  const transferFn = useServerFn(transferTicket);
+  const statusFn = useServerFn(setTicketStatus);
   const [summarizing, setSummarizing] = useState(false);
 
   const { data: quickReplies = [] } = useQuery({
     queryKey: ["quick_replies"],
-    queryFn: async () => {
-      const { data } = await supabase.from("quick_replies").select("*").order("shortcut");
-      return data ?? [];
-    },
+    queryFn: async () => (await supabase.from("quick_replies").select("*").order("shortcut")).data ?? [],
   });
 
   async function toggleAI() {
@@ -448,18 +632,28 @@ function ContextPanel({ conv }: { conv: Conversation | null }) {
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
   async function summarize() {
+    if (!conv) return; setSummarizing(true);
+    try { await summarizeFn({ data: { conversationId: conv.id } }); qc.invalidateQueries({ queryKey: ["conversations"] }); toast.success("Resumo gerado"); }
+    catch (e: any) { toast.error(e.message); } finally { setSummarizing(false); }
+  }
+  async function changeQueue(qid: string) {
     if (!conv) return;
-    setSummarizing(true);
-    try {
-      await summarizeFn({ data: { conversationId: conv.id } });
-      qc.invalidateQueries({ queryKey: ["conversations"] });
-      toast.success("Resumo gerado");
-    } catch (e: any) { toast.error(e.message); } finally { setSummarizing(false); }
+    await transferFn({ data: { conversationId: conv.id, queueId: qid === "none" ? null : qid } });
+    qc.invalidateQueries({ queryKey: ["conversations"] });
+  }
+  async function changeAgent(aid: string) {
+    if (!conv) return;
+    await transferFn({ data: { conversationId: conv.id, agentId: aid === "none" ? null : aid } });
+    qc.invalidateQueries({ queryKey: ["conversations"] });
+  }
+  async function resolve() {
+    if (!conv) return;
+    await statusFn({ data: { conversationId: conv.id, status: conv.status === "resolved" ? "open" : "resolved" } });
+    qc.invalidateQueries({ queryKey: ["conversations"] });
   }
 
   return (
-    <div className="grid h-full min-h-0 w-full grid-rows-[auto_auto_minmax(0,1fr)] gap-3">
-      {/* Contact card */}
+    <div className="grid h-full min-h-0 w-full grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-3">
       <div className="bento-card p-4">
         {conv ? (
           <div>
@@ -479,11 +673,15 @@ function ContextPanel({ conv }: { conv: Conversation | null }) {
             <div className="mt-3 flex gap-2">
               <Button variant="outline" size="sm" className="flex-1" onClick={toggleAI}>
                 <Sparkles className="mr-1 h-3.5 w-3.5" />
-                {conv.ai_enabled ? "Desativar IA" : "Ativar IA"}
+                {conv.ai_enabled ? "IA off" : "IA on"}
               </Button>
               <Button variant="outline" size="sm" className="flex-1" onClick={summarize} disabled={summarizing}>
                 {summarizing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <UserIcon className="mr-1 h-3.5 w-3.5" />}
                 Resumir
+              </Button>
+              <Button variant="outline" size="sm" className="flex-1" onClick={resolve}>
+                <CheckCheck className="mr-1 h-3.5 w-3.5" />
+                {conv.status === "resolved" ? "Reabrir" : "Resolver"}
               </Button>
             </div>
           </div>
@@ -492,7 +690,39 @@ function ContextPanel({ conv }: { conv: Conversation | null }) {
         )}
       </div>
 
-      {/* Summary */}
+      {/* Assign */}
+      {conv && conv.status !== "waiting" && (
+        <div className="bento-card p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <ArrowRightLeft className="h-3 w-3" /> Encaminhamento
+          </div>
+          <div className="space-y-2">
+            <div>
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Fila</div>
+              <Select value={conv.queue_id ?? "none"} onValueChange={changeQueue}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem fila</SelectItem>
+                  {queues.map((q) => <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {isAdmin && (
+              <div>
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">Atendente</div>
+                <Select value={conv.assigned_agent_id ?? "none"} onValueChange={changeAgent}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem atendente</SelectItem>
+                    {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name ?? a.email}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="bento-card p-4">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resumo IA</h3>
         <p className="text-sm leading-relaxed text-foreground/80">
@@ -500,11 +730,10 @@ function ContextPanel({ conv }: { conv: Conversation | null }) {
         </p>
       </div>
 
-      {/* Quick replies */}
       <div className="bento-card flex min-h-0 flex-col p-4">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Respostas Rápidas</h3>
-          <Link to="/settings" className="text-xs text-brand hover:underline">Gerenciar</Link>
+          <Link to="/settings/quick-replies" className="text-xs text-brand hover:underline">Gerenciar</Link>
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-1.5">
@@ -537,16 +766,11 @@ function NewConversationDialog({ onCreated }: { onCreated: (id: string) => void 
   const sendFn = useServerFn(sendMessage);
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
+    e.preventDefault(); setBusy(true);
     try {
       const r = await startFn({ data: { phone, name: name || undefined, firstMessage: message || undefined } });
-      if (message.trim()) {
-        await sendFn({ data: { conversationId: r.conversationId, text: message } });
-      }
-      onCreated(r.conversationId);
-      setOpen(false);
-      setPhone(""); setName(""); setMessage("");
+      if (message.trim()) await sendFn({ data: { conversationId: r.conversationId, text: message } });
+      onCreated(r.conversationId); setOpen(false); setPhone(""); setName(""); setMessage("");
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   }
 
@@ -571,9 +795,7 @@ function NewConversationDialog({ onCreated }: { onCreated: (id: string) => void 
             <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Iniciar"}
-            </Button>
+            <Button type="submit" disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Iniciar"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
