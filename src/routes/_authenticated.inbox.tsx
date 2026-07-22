@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import {
   Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap,
   MessageSquare, Loader2, User as UserIcon, PhoneCall, FileText,
-  Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon,
+  Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon, PanelRightClose, PanelRightOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
