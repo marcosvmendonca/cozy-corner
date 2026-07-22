@@ -26,7 +26,7 @@ function QuickRepliesSettings() {
   async function add() {
     if (!shortcut.trim() || !body.trim()) return;
     const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("quick_replies").insert({ shortcut: shortcut.trim(), body: body.trim(), created_by: u.user!.id });
+    const { error } = await supabase.from("quick_replies").insert({ shortcut: shortcut.trim(), body: body.trim(), owner_id: u.user!.id });
     if (error) return toast.error(error.message);
     setShortcut(""); setBody("");
     qc.invalidateQueries({ queryKey: ["quick_replies"] });

@@ -12,8 +12,6 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
 
         const event = (payload?.event ?? "").toString().toLowerCase();
 
-        // Log
-        await supabaseAdmin.from("webhook_events").insert({ source: "evolution", event, payload });
 
         if (event === "messages.upsert" || event === "messages_upsert") {
           const items = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
