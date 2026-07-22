@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import {
   Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap,
   MessageSquare, Loader2, User as UserIcon, PhoneCall, FileText,
-  Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon,
+  Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon, PanelRightClose, PanelRightOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
@@ -55,6 +55,7 @@ function InboxPage() {
   const [tab, setTab] = useState<Tab>("waiting");
   const [queueFilter, setQueueFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [contextOpen, setContextOpen] = useState(false);
 
   // Current user + admin
   const { data: me } = useQuery({
@@ -145,7 +146,10 @@ function InboxPage() {
 
   return (
     <div className="h-full w-full overflow-hidden bg-background p-3 md:p-4">
-      <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-[360px_minmax(0,1fr)_320px] md:gap-4">
+      <div className={cn(
+        "grid h-full grid-cols-1 gap-3 md:gap-4",
+        contextOpen && selected ? "md:grid-cols-[360px_minmax(0,1fr)_320px]" : "md:grid-cols-[360px_minmax(0,1fr)]",
+      )}>
         {/* LEFT */}
         <motion.div layout className="bento-card flex min-h-0 flex-col">
           <div className="flex items-center justify-between p-4 pb-3">
@@ -237,16 +241,29 @@ function InboxPage() {
         {/* CENTER */}
         <motion.div layout className="bento-card flex min-h-0 flex-col">
           {selected ? (
-            <ChatThread conv={selected} me={me} queues={queues} />
+            <ChatThread
+              conv={selected}
+              me={me}
+              queues={queues}
+              contextOpen={contextOpen}
+              onToggleContext={() => setContextOpen((v) => !v)}
+            />
           ) : (
             <EmptyState />
           )}
         </motion.div>
 
         {/* RIGHT */}
-        <motion.div layout className="hidden min-h-0 md:flex">
-          <ContextPanel conv={selected} queues={queues} agents={agents} isAdmin={!!me?.isAdmin} />
-        </motion.div>
+        {contextOpen && selected && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="hidden min-h-0 md:flex"
+          >
+            <ContextPanel conv={selected} queues={queues} agents={agents} isAdmin={!!me?.isAdmin} onClose={() => setContextOpen(false)} />
+          </motion.div>
+        )}
       </div>
     </div>
   );
@@ -318,15 +335,18 @@ function EmptyState() {
   );
 }
 
-function ChatThread({ conv, me, queues }: {
+function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
   conv: Conversation;
   me: { id: string; isAdmin: boolean } | null | undefined;
   queues: Array<{ id: string; name: string; color: string }>;
+  contextOpen: boolean;
+  onToggleContext: () => void;
 }) {
   const qc = useQueryClient();
   const sendFn = useServerFn(sendMessage);
   const uploadFn = useServerFn(uploadMedia);
   const suggestFn = useServerFn(suggestReply);
+  const summarizeFn = useServerFn(summarizeConversation);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", conv.id],
@@ -340,7 +360,30 @@ function ChatThread({ conv, me, queues }: {
 
   const [text, setText] = useState("");
   const [suggesting, setSuggesting] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Slash quick replies
+  const { data: quickReplies = [] } = useQuery({
+    queryKey: ["quick_replies"],
+    queryFn: async () => (await supabase.from("quick_replies").select("*").order("shortcut")).data ?? [],
+  });
+  const slashMatch = text.match(/(?:^|\s)\/(\S*)$/);
+  const slashQuery = slashMatch?.[1] ?? null;
+  const slashOpen = slashQuery !== null;
+  const slashResults = slashOpen
+    ? quickReplies.filter((q: any) => q.shortcut.toLowerCase().startsWith((slashQuery ?? "").toLowerCase())).slice(0, 8)
+    : [];
+  const [slashIdx, setSlashIdx] = useState(0);
+  useEffect(() => { setSlashIdx(0); }, [slashQuery]);
+
+  function applyQuickReply(body: string) {
+    // Replace the trailing "/xxx" (with the leading space if present) with body
+    const next = text.replace(/(^|\s)\/(\S*)$/, (_m, pre) => `${pre}${body}`);
+    setText(next);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -384,6 +427,13 @@ function ChatThread({ conv, me, queues }: {
     reader.readAsDataURL(file);
   }
 
+  async function handleSummarize() {
+    setSummarizing(true);
+    try { await summarizeFn({ data: { conversationId: conv.id } }); qc.invalidateQueries({ queryKey: ["conversations"] }); toast.success("Resumo gerado"); }
+    catch (e: any) { toast.error("IA: " + e.message); }
+    finally { setSummarizing(false); }
+  }
+
   const contactName = conv.contacts?.name || conv.contacts?.phone;
   const initials = (contactName ?? "?").slice(0, 2).toUpperCase();
 
@@ -394,17 +444,30 @@ function ChatThread({ conv, me, queues }: {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-3">
-        <Avatar className="h-10 w-10">
-          <AvatarFallback className="bg-brand text-brand-foreground text-xs font-semibold">{initials}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <div className="truncate text-sm font-semibold">{contactName}</div>
-          <div className="truncate text-[11px] text-muted-foreground">{conv.contacts?.phone}</div>
-        </div>
+        <button
+          onClick={onToggleContext}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 -m-1 text-left transition hover:bg-muted"
+          title="Ver dados do cliente"
+        >
+          <Avatar className="h-10 w-10">
+            <AvatarFallback className="bg-brand text-brand-foreground text-xs font-semibold">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{contactName}</div>
+            <div className="truncate text-[11px] text-muted-foreground">{conv.contacts?.phone}</div>
+          </div>
+        </button>
         {conv.status === "resolved" && <Badge variant="secondary" className="rounded-full">Resolvido</Badge>}
         <Badge variant={conv.ai_enabled ? "default" : "outline"} className="rounded-full">
           {conv.ai_enabled ? <><Sparkles className="mr-1 h-3 w-3" /> IA</> : "Manual"}
         </Badge>
+        <Button variant="outline" size="sm" onClick={handleSummarize} disabled={summarizing} title="Gerar resumo com IA">
+          {summarizing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+          Resumo IA
+        </Button>
+        <Button variant="ghost" size="icon" onClick={onToggleContext} title={contextOpen ? "Fechar painel" : "Abrir painel do cliente"}>
+          {contextOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+        </Button>
       </div>
 
       {/* Accept banner */}
@@ -442,15 +505,56 @@ function ChatThread({ conv, me, queues }: {
               .then((up) => sendMut.mutate({ mediaUrl: up.url, mediaType: "audio" }))
               .catch((e) => toast.error("Áudio: " + e.message));
           }} />
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder={waiting ? "Aceite o ticket para responder..." : "Digite uma mensagem..."}
-            className="min-h-[40px] flex-1 resize-none"
-            rows={1}
-            disabled={waiting}
-          />
+          <div className="relative flex-1">
+            {slashOpen && slashResults.length > 0 && (
+              <div className="absolute bottom-full left-0 right-0 z-20 mb-2 max-h-60 overflow-auto rounded-xl border bg-popover shadow-lg">
+                <div className="border-b px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Respostas rápidas
+                </div>
+                {slashResults.map((q: any, i: number) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onMouseEnter={() => setSlashIdx(i)}
+                    onClick={() => applyQuickReply(q.body)}
+                    className={cn(
+                      "flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition",
+                      i === slashIdx ? "bg-accent" : "hover:bg-muted",
+                    )}
+                  >
+                    <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs font-semibold">/{q.shortcut}</div>
+                      <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{q.body}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {slashOpen && slashResults.length === 0 && (
+              <div className="absolute bottom-full left-0 right-0 z-20 mb-2 rounded-xl border bg-popover px-3 py-2 text-xs text-muted-foreground shadow-lg">
+                Nenhuma resposta rápida com "/{slashQuery}". <Link to="/settings/quick-replies" className="text-brand hover:underline">Criar</Link>
+              </div>
+            )}
+            <Textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (slashOpen && slashResults.length > 0) {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setSlashIdx((i) => (i + 1) % slashResults.length); return; }
+                  if (e.key === "ArrowUp") { e.preventDefault(); setSlashIdx((i) => (i - 1 + slashResults.length) % slashResults.length); return; }
+                  if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyQuickReply((slashResults[slashIdx] as any).body); return; }
+                  if (e.key === "Escape") { e.preventDefault(); setText(text.replace(/(^|\s)\/(\S*)$/, "$1")); return; }
+                }
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+              }}
+              placeholder={waiting ? "Aceite o ticket para responder..." : "Digite uma mensagem... (use / para respostas rápidas)"}
+              className="min-h-[40px] w-full resize-none"
+              rows={1}
+              disabled={waiting}
+            />
+          </div>
           <Button variant="outline" size="icon" onClick={handleSuggest} disabled={suggesting || waiting} title="Sugestão da IA">
             {suggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           </Button>
@@ -609,89 +713,75 @@ function AudioRecorder({ onRecorded }: { onRecorded: (dataUrl: string, mime: str
   );
 }
 
-function ContextPanel({ conv, queues, agents, isAdmin }: {
-  conv: Conversation | null;
+function ContextPanel({ conv, queues, agents, isAdmin, onClose }: {
+  conv: Conversation;
   queues: Array<{ id: string; name: string; color: string }>;
   agents: Array<{ id: string; full_name: string | null; email: string | null }>;
   isAdmin: boolean;
+  onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const summarizeFn = useServerFn(summarizeConversation);
   const transferFn = useServerFn(transferTicket);
   const statusFn = useServerFn(setTicketStatus);
-  const [summarizing, setSummarizing] = useState(false);
-
-  const { data: quickReplies = [] } = useQuery({
-    queryKey: ["quick_replies"],
-    queryFn: async () => (await supabase.from("quick_replies").select("*").order("shortcut")).data ?? [],
-  });
 
   async function toggleAI() {
-    if (!conv) return;
     await supabase.from("conversations").update({ ai_enabled: !conv.ai_enabled }).eq("id", conv.id);
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
-  async function summarize() {
-    if (!conv) return; setSummarizing(true);
-    try { await summarizeFn({ data: { conversationId: conv.id } }); qc.invalidateQueries({ queryKey: ["conversations"] }); toast.success("Resumo gerado"); }
-    catch (e: any) { toast.error(e.message); } finally { setSummarizing(false); }
-  }
   async function changeQueue(qid: string) {
-    if (!conv) return;
     await transferFn({ data: { conversationId: conv.id, queueId: qid === "none" ? null : qid } });
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
   async function changeAgent(aid: string) {
-    if (!conv) return;
     await transferFn({ data: { conversationId: conv.id, agentId: aid === "none" ? null : aid } });
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
   async function resolve() {
-    if (!conv) return;
     await statusFn({ data: { conversationId: conv.id, status: conv.status === "resolved" ? "open" : "resolved" } });
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
 
+  const extracted = (conv.contacts?.extracted_data ?? null) as Record<string, any> | null;
+
   return (
     <div className="grid h-full min-h-0 w-full grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-3">
       <div className="bento-card p-4">
-        {conv ? (
-          <div>
-            <div className="flex items-center gap-3">
-              <Avatar className="h-11 w-11">
-                <AvatarFallback className="bg-brand text-brand-foreground font-semibold">
-                  {(conv.contacts?.name ?? conv.contacts?.phone).slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{conv.contacts?.name ?? "Sem nome"}</div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <PhoneCall className="h-3 w-3" /> {conv.contacts?.phone}
-                </div>
-              </div>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dados do cliente</h3>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose} title="Fechar">
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-11 w-11">
+            <AvatarFallback className="bg-brand text-brand-foreground font-semibold">
+              {(conv.contacts?.name ?? conv.contacts?.phone ?? "?").slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{conv.contacts?.name ?? "Sem nome"}</div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <PhoneCall className="h-3 w-3" /> {conv.contacts?.phone}
             </div>
-            <div className="mt-3 flex gap-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={toggleAI}>
-                <Sparkles className="mr-1 h-3.5 w-3.5" />
-                {conv.ai_enabled ? "IA off" : "IA on"}
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={summarize} disabled={summarizing}>
-                {summarizing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <UserIcon className="mr-1 h-3.5 w-3.5" />}
-                Resumir
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={resolve}>
-                <CheckCheck className="mr-1 h-3.5 w-3.5" />
-                {conv.status === "resolved" ? "Reabrir" : "Resolver"}
-              </Button>
-            </div>
+            {conv.contacts?.email && (
+              <div className="mt-0.5 truncate text-xs text-muted-foreground">{conv.contacts.email}</div>
+            )}
           </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">Selecione uma conversa</div>
-        )}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" onClick={toggleAI}>
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            {conv.ai_enabled ? "IA off" : "IA on"}
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" onClick={resolve}>
+            <CheckCheck className="mr-1 h-3.5 w-3.5" />
+            {conv.status === "resolved" ? "Reabrir" : "Resolver"}
+          </Button>
+        </div>
       </div>
 
       {/* Assign */}
-      {conv && conv.status !== "waiting" && (
+      {conv.status !== "waiting" && (
         <div className="bento-card p-4">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             <ArrowRightLeft className="h-3 w-3" /> Encaminhamento
@@ -726,30 +816,25 @@ function ContextPanel({ conv, queues, agents, isAdmin }: {
       <div className="bento-card p-4">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resumo IA</h3>
         <p className="text-sm leading-relaxed text-foreground/80">
-          {conv?.ai_summary ?? <span className="italic text-muted-foreground">Nenhum resumo ainda. Clique em "Resumir".</span>}
+          {conv.ai_summary ?? <span className="italic text-muted-foreground">Nenhum resumo ainda. Clique em "Resumo IA" acima do chat.</span>}
         </p>
       </div>
 
       <div className="bento-card flex min-h-0 flex-col p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Respostas Rápidas</h3>
-          <Link to="/settings/quick-replies" className="text-xs text-brand hover:underline">Gerenciar</Link>
-        </div>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dados extraídos</h3>
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-1.5">
-            {quickReplies.length === 0 && (
-              <p className="text-xs italic text-muted-foreground">Crie atalhos em Configurações.</p>
-            )}
-            {quickReplies.map((q) => (
-              <div key={q.id} className="group rounded-lg border p-2 text-xs hover:bg-muted">
-                <div className="flex items-center gap-1">
-                  <Zap className="h-3 w-3 text-brand" />
-                  <span className="font-mono font-semibold">/{q.shortcut}</span>
+          {extracted && Object.keys(extracted).length > 0 ? (
+            <dl className="space-y-1.5 text-xs">
+              {Object.entries(extracted).map(([k, v]) => (
+                <div key={k} className="flex gap-2">
+                  <dt className="w-24 shrink-0 font-medium capitalize text-muted-foreground">{k}</dt>
+                  <dd className="min-w-0 flex-1 break-words">{Array.isArray(v) ? v.join(", ") : (v == null ? "—" : String(v))}</dd>
                 </div>
-                <div className="mt-1 line-clamp-2 text-muted-foreground">{q.body}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-xs italic text-muted-foreground">Nenhum dado extraído ainda. Gere um resumo para extrair.</p>
+          )}
         </ScrollArea>
       </div>
     </div>
