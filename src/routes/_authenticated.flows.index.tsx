@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, GitBranch, Trash2, Edit3 } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/flows")({
+export const Route = createFileRoute("/_authenticated/flows/")({
   ssr: false,
   head: () => ({
     meta: [
