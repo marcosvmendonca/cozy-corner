@@ -715,7 +715,18 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           </div>
         )}
         {deleted ? (
-          <div className="flex items-center gap-1.5 text-xs"><Trash2 className="h-3 w-3" /> Mensagem apagada</div>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 text-xs cursor-help">
+                  <Trash2 className="h-3 w-3" /> Mensagem apagada
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Mensagem apagada{(m as any).deleted_at ? ` em ${new Date((m as any).deleted_at).toLocaleString("pt-BR")}` : ""}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : editing ? (
           <div className="flex flex-col gap-1.5">
             <Textarea
