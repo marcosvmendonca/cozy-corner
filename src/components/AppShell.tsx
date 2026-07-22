@@ -100,6 +100,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="mt-auto flex flex-col gap-2 md:px-1">
+          <button
+            onClick={toggleNotifications}
+            className="relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60"
+            title={enabled ? "Silenciar notificações" : "Ativar notificações"}
+          >
+            {enabled ? <Bell className="h-[18px] w-[18px] shrink-0" /> : <BellOff className="h-[18px] w-[18px] shrink-0" />}
+            <span className="hidden md:inline">{enabled ? "Notificações" : "Silenciado"}</span>
+            {unread > 0 && (
+              <span className="absolute right-2 top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1 text-[10px] font-bold text-brand-foreground">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </button>
+
           <div className="flex items-center gap-2 rounded-xl bg-sidebar-accent/40 p-2">
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
