@@ -35,7 +35,19 @@ function IntegrationSettings() {
   const [statusState, setStatusState] = useState<string | null>(null);
   const [loading, setLoading] = useState<null | "save" | "qr" | "status" | "hook">(null);
 
-  const webhookUrl = typeof window !== "undefined" ? `${window.location.origin}/api/public/whatsapp/webhook` : "";
+  // Evolution API precisa de uma URL estável e acessível sem autenticação.
+  // O host de sandbox (`*.lovableproject.com` / `id-preview--*`) redireciona por auth-bridge
+  // e devolve 302, então o webhook nunca chega. Sempre usamos o host estável de preview.
+  const webhookUrl = (() => {
+    if (typeof window === "undefined") return "";
+    const host = window.location.hostname;
+    const m = host.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+    const projectId = m?.[1];
+    if (projectId) {
+      return `https://project--${projectId}-dev.lovable.app/api/public/whatsapp/webhook`;
+    }
+    return `${window.location.origin}/api/public/whatsapp/webhook`;
+  })();
 
   async function refreshStatus() {
     setLoading("status");
