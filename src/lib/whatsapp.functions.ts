@@ -152,3 +152,145 @@ export const uploadMedia = createServerFn({ method: "POST" })
     const { data: signed } = await supabaseAdmin.storage.from("whatsapp-media").createSignedUrl(path, 60 * 60 * 24 * 7);
     return { path, url: signed?.signedUrl };
   });
+
+function toJid(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return `${digits}@s.whatsapp.net`;
+}
+
+export const deleteMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ messageId: z.string().uuid() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { supabase } = context;
+    const { data: msg, error } = await supabase
+      .from("messages")
+      .select("id, external_id, direction, conversation_id, conversations(contacts(phone))")
+      .eq("id", data.messageId)
+      .single();
+    if (error || !msg) throw new Error("Mensagem não encontrada");
+    if (msg.direction !== "out") throw new Error("Só é possível apagar mensagens enviadas por você");
+
+    const phone = (msg as any).conversations?.contacts?.phone as string | undefined;
+    if (msg.external_id && phone) {
+      const { fetchEvoConfig, evoDeleteMessage } = await import("./whatsapp.server");
+      const cfg = await fetchEvoConfig();
+      if (cfg) {
+        const res = await evoDeleteMessage(cfg, {
+          id: msg.external_id,
+          remoteJid: toJid(phone),
+          fromMe: true,
+        });
+        if (!res.ok) throw new Error("Falha ao apagar no WhatsApp: " + JSON.stringify(res.data).slice(0, 200));
+      }
+    }
+    await supabase.from("messages").update({ deleted_at: new Date().toISOString(), body: null, media_url: null }).eq("id", data.messageId);
+    return { ok: true };
+  });
+
+export const editMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({
+    messageId: z.string().uuid(),
+    text: z.string().min(1),
+  }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { supabase } = context;
+    const { data: msg, error } = await supabase
+      .from("messages")
+      .select("id, external_id, direction, type, created_at, conversations(contacts(phone))")
+      .eq("id", data.messageId)
+      .single();
+    if (error || !msg) throw new Error("Mensagem não encontrada");
+    if (msg.direction !== "out") throw new Error("Só é possível editar suas mensagens");
+    if (msg.type !== "text") throw new Error("Apenas mensagens de texto podem ser editadas");
+    const ageMin = (Date.now() - new Date(msg.created_at).getTime()) / 60000;
+    if (ageMin > 15) throw new Error("Mensagens só podem ser editadas em até 15 minutos");
+
+    const phone = (msg as any).conversations?.contacts?.phone as string | undefined;
+    if (msg.external_id && phone) {
+      const { fetchEvoConfig, evoEditMessage } = await import("./whatsapp.server");
+      const cfg = await fetchEvoConfig();
+      if (cfg) {
+        const res = await evoEditMessage(cfg, phone, {
+          id: msg.external_id,
+          remoteJid: toJid(phone),
+          fromMe: true,
+        }, data.text);
+        if (!res.ok) throw new Error("Falha ao editar no WhatsApp: " + JSON.stringify(res.data).slice(0, 200));
+      }
+    }
+    await supabase.from("messages").update({ body: data.text, edited_at: new Date().toISOString() }).eq("id", data.messageId);
+    return { ok: true };
+  });
+
+export const forwardMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({
+    messageId: z.string().uuid(),
+    targetConversationIds: z.array(z.string().uuid()).min(1),
+  }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { supabase } = context;
+    const { data: msg, error } = await supabase
+      .from("messages")
+      .select("body, media_url, type")
+      .eq("id", data.messageId)
+      .single();
+    if (error || !msg) throw new Error("Mensagem não encontrada");
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const cid of data.targetConversationIds) {
+      try {
+        const { data: conv } = await supabase
+          .from("conversations")
+          .select("id, contacts(phone)")
+          .eq("id", cid)
+          .single();
+        if (!conv) throw new Error("Conversa alvo não encontrada");
+        const phone = (conv as any).contacts.phone as string;
+        const { fetchEvoConfig, evoSendText, evoSendMedia, evoSendAudio } = await import("./whatsapp.server");
+        const cfg = await fetchEvoConfig();
+        let externalId: string | null = null;
+        let status = "pending";
+        let errorMessage: string | null = null;
+        if (cfg) {
+          let result;
+          if (msg.type === "text" && msg.body) {
+            result = await evoSendText(cfg, phone, msg.body);
+          } else if (msg.media_url) {
+            if (msg.type === "audio") result = await evoSendAudio(cfg, phone, msg.media_url);
+            else if (msg.type === "image" || msg.type === "video" || msg.type === "document") {
+              result = await evoSendMedia(cfg, phone, msg.media_url, msg.type, msg.body ?? undefined);
+            }
+          }
+          if (result) {
+            if (result.ok) { status = "sent"; externalId = ((result.data as any)?.key?.id as string) ?? null; }
+            else { status = "failed"; errorMessage = JSON.stringify(result.data).slice(0, 300); }
+          }
+        } else {
+          status = "failed"; errorMessage = "WhatsApp não configurado";
+        }
+        await supabase.from("messages").insert({
+          conversation_id: cid,
+          direction: "out",
+          type: msg.type,
+          body: msg.body,
+          media_url: msg.media_url,
+          sent_by: "agent",
+          sender_user_id: context.userId,
+          external_id: externalId,
+          status,
+          error_message: errorMessage,
+        });
+        await supabase.from("conversations").update({
+          last_message_at: new Date().toISOString(),
+          last_message_preview: msg.body ?? `[${msg.type}]`,
+          status: "open",
+        }).eq("id", cid);
+        results.push({ id: cid, ok: status === "sent", error: errorMessage ?? undefined });
+      } catch (e: any) {
+        results.push({ id: cid, ok: false, error: e.message });
+      }
+    }
+    return { results };
+  });
