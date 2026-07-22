@@ -55,6 +55,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          accepted_at: string | null
           ai_enabled: boolean
           ai_summary: string | null
           assigned_agent_id: string | null
@@ -63,11 +64,13 @@ export type Database = {
           id: string
           last_message_at: string
           last_message_preview: string | null
+          queue_id: string | null
           status: Database["public"]["Enums"]["conversation_status"]
           unread_count: number
           updated_at: string
         }
         Insert: {
+          accepted_at?: string | null
           ai_enabled?: boolean
           ai_summary?: string | null
           assigned_agent_id?: string | null
@@ -76,11 +79,13 @@ export type Database = {
           id?: string
           last_message_at?: string
           last_message_preview?: string | null
+          queue_id?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
           unread_count?: number
           updated_at?: string
         }
         Update: {
+          accepted_at?: string | null
           ai_enabled?: boolean
           ai_summary?: string | null
           assigned_agent_id?: string | null
@@ -89,6 +94,7 @@ export type Database = {
           id?: string
           last_message_at?: string
           last_message_preview?: string | null
+          queue_id?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
           unread_count?: number
           updated_at?: string
@@ -99,6 +105,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "queues"
             referencedColumns: ["id"]
           },
         ]
@@ -273,6 +286,59 @@ export type Database = {
         }
         Relationships: []
       }
+      queue_members: {
+        Row: {
+          created_at: string
+          queue_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          queue_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          queue_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "queue_members_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "queues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      queues: {
+        Row: {
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       quick_replies: {
         Row: {
           body: string
@@ -370,6 +436,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_queue_member: {
+        Args: { _queue_id: string; _user_id: string }
         Returns: boolean
       }
     }
