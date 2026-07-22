@@ -23,7 +23,9 @@ import {
   Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap,
   MessageSquare, Loader2, User as UserIcon, PhoneCall, FileText,
   Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon, PanelRightClose, PanelRightOpen,
+  MoreVertical, Trash2, Pencil, Forward, Check, X,
 } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
