@@ -713,89 +713,75 @@ function AudioRecorder({ onRecorded }: { onRecorded: (dataUrl: string, mime: str
   );
 }
 
-function ContextPanel({ conv, queues, agents, isAdmin }: {
-  conv: Conversation | null;
+function ContextPanel({ conv, queues, agents, isAdmin, onClose }: {
+  conv: Conversation;
   queues: Array<{ id: string; name: string; color: string }>;
   agents: Array<{ id: string; full_name: string | null; email: string | null }>;
   isAdmin: boolean;
+  onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const summarizeFn = useServerFn(summarizeConversation);
   const transferFn = useServerFn(transferTicket);
   const statusFn = useServerFn(setTicketStatus);
-  const [summarizing, setSummarizing] = useState(false);
-
-  const { data: quickReplies = [] } = useQuery({
-    queryKey: ["quick_replies"],
-    queryFn: async () => (await supabase.from("quick_replies").select("*").order("shortcut")).data ?? [],
-  });
 
   async function toggleAI() {
-    if (!conv) return;
     await supabase.from("conversations").update({ ai_enabled: !conv.ai_enabled }).eq("id", conv.id);
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
-  async function summarize() {
-    if (!conv) return; setSummarizing(true);
-    try { await summarizeFn({ data: { conversationId: conv.id } }); qc.invalidateQueries({ queryKey: ["conversations"] }); toast.success("Resumo gerado"); }
-    catch (e: any) { toast.error(e.message); } finally { setSummarizing(false); }
-  }
   async function changeQueue(qid: string) {
-    if (!conv) return;
     await transferFn({ data: { conversationId: conv.id, queueId: qid === "none" ? null : qid } });
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
   async function changeAgent(aid: string) {
-    if (!conv) return;
     await transferFn({ data: { conversationId: conv.id, agentId: aid === "none" ? null : aid } });
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
   async function resolve() {
-    if (!conv) return;
     await statusFn({ data: { conversationId: conv.id, status: conv.status === "resolved" ? "open" : "resolved" } });
     qc.invalidateQueries({ queryKey: ["conversations"] });
   }
 
+  const extracted = (conv.contacts?.extracted_data ?? null) as Record<string, any> | null;
+
   return (
     <div className="grid h-full min-h-0 w-full grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-3">
       <div className="bento-card p-4">
-        {conv ? (
-          <div>
-            <div className="flex items-center gap-3">
-              <Avatar className="h-11 w-11">
-                <AvatarFallback className="bg-brand text-brand-foreground font-semibold">
-                  {(conv.contacts?.name ?? conv.contacts?.phone).slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{conv.contacts?.name ?? "Sem nome"}</div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <PhoneCall className="h-3 w-3" /> {conv.contacts?.phone}
-                </div>
-              </div>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dados do cliente</h3>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose} title="Fechar">
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-11 w-11">
+            <AvatarFallback className="bg-brand text-brand-foreground font-semibold">
+              {(conv.contacts?.name ?? conv.contacts?.phone ?? "?").slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{conv.contacts?.name ?? "Sem nome"}</div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <PhoneCall className="h-3 w-3" /> {conv.contacts?.phone}
             </div>
-            <div className="mt-3 flex gap-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={toggleAI}>
-                <Sparkles className="mr-1 h-3.5 w-3.5" />
-                {conv.ai_enabled ? "IA off" : "IA on"}
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={summarize} disabled={summarizing}>
-                {summarizing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <UserIcon className="mr-1 h-3.5 w-3.5" />}
-                Resumir
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1" onClick={resolve}>
-                <CheckCheck className="mr-1 h-3.5 w-3.5" />
-                {conv.status === "resolved" ? "Reabrir" : "Resolver"}
-              </Button>
-            </div>
+            {conv.contacts?.email && (
+              <div className="mt-0.5 truncate text-xs text-muted-foreground">{conv.contacts.email}</div>
+            )}
           </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">Selecione uma conversa</div>
-        )}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" onClick={toggleAI}>
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            {conv.ai_enabled ? "IA off" : "IA on"}
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" onClick={resolve}>
+            <CheckCheck className="mr-1 h-3.5 w-3.5" />
+            {conv.status === "resolved" ? "Reabrir" : "Resolver"}
+          </Button>
+        </div>
       </div>
 
       {/* Assign */}
-      {conv && conv.status !== "waiting" && (
+      {conv.status !== "waiting" && (
         <div className="bento-card p-4">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             <ArrowRightLeft className="h-3 w-3" /> Encaminhamento
@@ -830,30 +816,25 @@ function ContextPanel({ conv, queues, agents, isAdmin }: {
       <div className="bento-card p-4">
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resumo IA</h3>
         <p className="text-sm leading-relaxed text-foreground/80">
-          {conv?.ai_summary ?? <span className="italic text-muted-foreground">Nenhum resumo ainda. Clique em "Resumir".</span>}
+          {conv.ai_summary ?? <span className="italic text-muted-foreground">Nenhum resumo ainda. Clique em "Resumo IA" acima do chat.</span>}
         </p>
       </div>
 
       <div className="bento-card flex min-h-0 flex-col p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Respostas Rápidas</h3>
-          <Link to="/settings/quick-replies" className="text-xs text-brand hover:underline">Gerenciar</Link>
-        </div>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dados extraídos</h3>
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-1.5">
-            {quickReplies.length === 0 && (
-              <p className="text-xs italic text-muted-foreground">Crie atalhos em Configurações.</p>
-            )}
-            {quickReplies.map((q) => (
-              <div key={q.id} className="group rounded-lg border p-2 text-xs hover:bg-muted">
-                <div className="flex items-center gap-1">
-                  <Zap className="h-3 w-3 text-brand" />
-                  <span className="font-mono font-semibold">/{q.shortcut}</span>
+          {extracted && Object.keys(extracted).length > 0 ? (
+            <dl className="space-y-1.5 text-xs">
+              {Object.entries(extracted).map(([k, v]) => (
+                <div key={k} className="flex gap-2">
+                  <dt className="w-24 shrink-0 font-medium capitalize text-muted-foreground">{k}</dt>
+                  <dd className="min-w-0 flex-1 break-words">{Array.isArray(v) ? v.join(", ") : (v == null ? "—" : String(v))}</dd>
                 </div>
-                <div className="mt-1 line-clamp-2 text-muted-foreground">{q.body}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-xs italic text-muted-foreground">Nenhum dado extraído ainda. Gere um resumo para extrair.</p>
+          )}
         </ScrollArea>
       </div>
     </div>
