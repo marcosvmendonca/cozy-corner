@@ -55,6 +55,7 @@ function InboxPage() {
   const [tab, setTab] = useState<Tab>("waiting");
   const [queueFilter, setQueueFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [contextOpen, setContextOpen] = useState(false);
 
   // Current user + admin
   const { data: me } = useQuery({
