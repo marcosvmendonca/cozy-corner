@@ -360,7 +360,30 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
 
   const [text, setText] = useState("");
   const [suggesting, setSuggesting] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Slash quick replies
+  const { data: quickReplies = [] } = useQuery({
+    queryKey: ["quick_replies"],
+    queryFn: async () => (await supabase.from("quick_replies").select("*").order("shortcut")).data ?? [],
+  });
+  const slashMatch = text.match(/(?:^|\s)\/(\S*)$/);
+  const slashQuery = slashMatch?.[1] ?? null;
+  const slashOpen = slashQuery !== null;
+  const slashResults = slashOpen
+    ? quickReplies.filter((q: any) => q.shortcut.toLowerCase().startsWith((slashQuery ?? "").toLowerCase())).slice(0, 8)
+    : [];
+  const [slashIdx, setSlashIdx] = useState(0);
+  useEffect(() => { setSlashIdx(0); }, [slashQuery]);
+
+  function applyQuickReply(body: string) {
+    // Replace the trailing "/xxx" (with the leading space if present) with body
+    const next = text.replace(/(^|\s)\/(\S*)$/, (_m, pre) => `${pre}${body}`);
+    setText(next);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
