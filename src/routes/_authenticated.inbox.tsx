@@ -651,38 +651,238 @@ function AcceptTicketButton({ conversationId, queues }: {
   );
 }
 
-function MessageBubble({ m }: { m: Message }) {
+function MessageBubble({ m, currentConversationId }: { m: Message; currentConversationId: string }) {
   const out = m.direction === "out";
+  const qc = useQueryClient();
+  const deleteFn = useServerFn(deleteMessage);
+  const editFn = useServerFn(editMessage);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(m.body ?? "");
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const deleted = !!(m as any).deleted_at;
+  const edited = !!(m as any).edited_at;
+  const ageMin = (Date.now() - new Date(m.created_at).getTime()) / 60000;
+  const canEdit = out && m.type === "text" && !deleted && ageMin <= 15;
+  const canDelete = out && !deleted;
+
+  async function handleDelete() {
+    if (!confirm("Apagar esta mensagem para todos?")) return;
+    setBusy(true);
+    try { await deleteFn({ data: { messageId: m.id } }); qc.invalidateQueries({ queryKey: ["messages", currentConversationId] }); }
+    catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+  async function handleEditSave() {
+    const t = draft.trim();
+    if (!t || t === m.body) { setEditing(false); return; }
+    setBusy(true);
+    try { await editFn({ data: { messageId: m.id, text: t } }); qc.invalidateQueries({ queryKey: ["messages", currentConversationId] }); setEditing(false); }
+    catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className={cn("flex", out ? "justify-end" : "justify-start")}
+      className={cn("group flex items-start gap-1", out ? "justify-end" : "justify-start")}
     >
+      {out && !deleted && (
+        <MessageActions
+          onEdit={canEdit ? () => { setDraft(m.body ?? ""); setEditing(true); } : undefined}
+          onDelete={canDelete ? handleDelete : undefined}
+          onForward={() => setForwardOpen(true)}
+          busy={busy}
+        />
+      )}
       <div className={cn(
         "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
         out ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface",
         m.sent_by === "ai" && "ring-1 ring-brand/40",
+        deleted && "italic opacity-60",
       )}>
-        {m.sent_by === "ai" && (
+        {m.sent_by === "ai" && !deleted && (
           <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wider opacity-70">
             <Sparkles className="h-3 w-3" /> IA
           </div>
         )}
-        {m.type === "image" && m.media_url && <img src={m.media_url} alt="" className="mb-1 max-h-64 rounded-lg" />}
-        {m.type === "audio" && m.media_url && <audio src={m.media_url} controls className="mb-1 max-w-full" />}
-        {m.type === "video" && m.media_url && <video src={m.media_url} controls className="mb-1 max-h-64 rounded-lg" />}
-        {m.type === "document" && m.media_url && (
-          <a href={m.media_url} target="_blank" rel="noreferrer" className="mb-1 flex items-center gap-2 rounded-lg bg-black/10 p-2 text-xs">
-            <FileText className="h-4 w-4" /> Documento
-          </a>
+        {deleted ? (
+          <div className="flex items-center gap-1.5 text-xs"><Trash2 className="h-3 w-3" /> Mensagem apagada</div>
+        ) : editing ? (
+          <div className="flex flex-col gap-1.5">
+            <Textarea
+              value={draft} onChange={(e) => setDraft(e.target.value)}
+              className="min-h-[60px] bg-white/90 text-foreground"
+              autoFocus
+            />
+            <div className="flex justify-end gap-1">
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={busy}><X className="h-3.5 w-3.5" /></Button>
+              <Button size="sm" onClick={handleEditSave} disabled={busy}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {m.type === "image" && m.media_url && <img src={m.media_url} alt="" className="mb-1 max-h-64 rounded-lg" />}
+            {m.type === "audio" && m.media_url && <audio src={m.media_url} controls className="mb-1 max-w-full" />}
+            {m.type === "video" && m.media_url && <video src={m.media_url} controls className="mb-1 max-h-64 rounded-lg" />}
+            {m.type === "document" && m.media_url && (
+              <a href={m.media_url} target="_blank" rel="noreferrer" className="mb-1 flex items-center gap-2 rounded-lg bg-black/10 p-2 text-xs">
+                <FileText className="h-4 w-4" /> Documento
+              </a>
+            )}
+            {m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>}
+          </>
         )}
-        {m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>}
-        <div className={cn("mt-1 text-[10px] opacity-60", out ? "text-right" : "")}>
-          {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-          {out && m.status && ` · ${m.status === "sent" ? "✓" : m.status === "failed" ? "!" : "…"}`}
-        </div>
+        {!deleted && !editing && (
+          <div className={cn("mt-1 text-[10px] opacity-60", out ? "text-right" : "")}>
+            {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            {edited && " · editada"}
+            {out && m.status && ` · ${m.status === "sent" ? "✓" : m.status === "failed" ? "!" : "…"}`}
+          </div>
+        )}
       </div>
+      {!out && !deleted && (
+        <MessageActions onForward={() => setForwardOpen(true)} busy={busy} />
+      )}
+      {forwardOpen && (
+        <ForwardDialog
+          messageId={m.id}
+          currentConversationId={currentConversationId}
+          open={forwardOpen}
+          onOpenChange={setForwardOpen}
+        />
+      )}
     </motion.div>
+  );
+}
+
+function MessageActions({ onEdit, onDelete, onForward, busy }: {
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onForward?: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost" size="icon"
+          className="mt-1 h-7 w-7 opacity-0 transition group-hover:opacity-100 data-[state=open]:opacity-100"
+          disabled={busy}
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        {onForward && (
+          <DropdownMenuItem onClick={onForward}><Forward className="mr-2 h-4 w-4" /> Encaminhar</DropdownMenuItem>
+        )}
+        {onEdit && (
+          <DropdownMenuItem onClick={onEdit}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+        )}
+        {onDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" /> Apagar
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ForwardDialog({ messageId, currentConversationId, open, onOpenChange }: {
+  messageId: string;
+  currentConversationId: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const forwardFn = useServerFn(forwardMessage);
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  const { data: convs = [] } = useQuery({
+    queryKey: ["forward-conversations"],
+    enabled: open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("conversations")
+        .select("id, contacts(name, phone)")
+        .neq("id", currentConversationId)
+        .order("last_message_at", { ascending: false })
+        .limit(100);
+      return (data ?? []) as any[];
+    },
+  });
+
+  const filtered = convs.filter((c: any) => {
+    const q = filter.toLowerCase();
+    return !q || (c.contacts?.name ?? "").toLowerCase().includes(q) || (c.contacts?.phone ?? "").includes(q);
+  });
+
+  function toggle(id: string) {
+    const s = new Set(selected);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    setSelected(s);
+  }
+
+  async function confirm() {
+    if (selected.size === 0) return;
+    setBusy(true);
+    try {
+      const r = await forwardFn({ data: { messageId, targetConversationIds: Array.from(selected) } });
+      const okCount = r.results.filter((x) => x.ok).length;
+      const failCount = r.results.length - okCount;
+      if (okCount) toast.success(`Encaminhada para ${okCount} conversa(s)`);
+      if (failCount) toast.error(`Falha em ${failCount} conversa(s)`);
+      onOpenChange(false);
+      setSelected(new Set());
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Encaminhar mensagem</DialogTitle>
+          <DialogDescription>Selecione uma ou mais conversas.</DialogDescription>
+        </DialogHeader>
+        <Input placeholder="Buscar contato…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <ScrollArea className="h-72 rounded-md border">
+          <div className="divide-y">
+            {filtered.map((c: any) => {
+              const name = c.contacts?.name || c.contacts?.phone || "Sem nome";
+              const active = selected.has(c.id);
+              return (
+                <button
+                  key={c.id} type="button" onClick={() => toggle(c.id)}
+                  className={cn("flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition", active ? "bg-accent" : "hover:bg-muted")}
+                >
+                  <Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{name.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{name}</div>
+                    <div className="truncate text-[11px] text-muted-foreground">{c.contacts?.phone}</div>
+                  </div>
+                  {active && <Check className="h-4 w-4 text-brand" />}
+                </button>
+              );
+            })}
+            {filtered.length === 0 && <div className="p-4 text-center text-xs text-muted-foreground">Nenhuma conversa</div>}
+          </div>
+        </ScrollArea>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancelar</Button>
+          <Button onClick={confirm} disabled={busy || selected.size === 0}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : `Encaminhar (${selected.size})`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
