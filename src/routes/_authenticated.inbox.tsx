@@ -695,7 +695,7 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
       {out && !deleted && (
         <MessageActions
           onEdit={canEdit ? () => { setDraft(m.body ?? ""); setEditing(true); } : undefined}
-          onDelete={canDelete ? handleDelete : undefined}
+          onDelete={canDelete ? () => setConfirmDelete(true) : undefined}
           onForward={() => setForwardOpen(true)}
           busy={busy}
         />
