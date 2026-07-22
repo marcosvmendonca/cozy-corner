@@ -1,79 +1,69 @@
 
-# Deploy passo-a-passo — Fase atual: Supabase self-host
+## Consertar `.env` do Supabase self-hosted
 
-DNS + EasyPanel prontos. Próximo bloco é subir o Supabase na VPS. Vou te guiar em blocos pequenos — você executa, cola o resultado, eu destravo o próximo.
+O `.env` atual está quase vazio — faltam ~60 variáveis obrigatórias (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, JWT_EXPIRY, KONG_HTTP_PORT, POOLER_*, STORAGE_*, etc.), por isso o container `supabase-db` fica reiniciando.
 
-## Bloco 1 (agora) — Subir Supabase via docker-compose
+A correção é **restaurar o `.env.example` completo** e editar **apenas** as linhas que precisam de valores reais, deixando todo o resto (portas, hosts internos, defaults) como veio do repo oficial.
 
-Isso segue a seção **4.2 → 4.4** do `DEPLOY.md`. Prefiro docker-compose direto por SSH em vez de app do EasyPanel — é o método oficial do Supabase e evita dor de cabeça com o Traefik do painel na primeira subida.
+### Passos na VPS
 
-### Passos que você executa
+**1. Restaurar o `.env` completo do repo oficial:**
 
-1. **SSH na VPS** como root (ou usuário com docker).
-2. Clonar e preparar o diretório:
-   ```bash
-   mkdir -p /opt/supabase && cd /opt/supabase
-   git clone --depth 1 https://github.com/supabase/supabase.git
-   cp -R supabase/docker/* .
-   cp supabase/docker/.env.example .env
-   rm -rf supabase
-   ```
-3. **Gerar segredos** (rode e guarde cada um num bloco de notas):
-   ```bash
-   openssl rand -hex 32   # POSTGRES_PASSWORD
-   openssl rand -hex 32   # VAULT_ENC_KEY
-   openssl rand -hex 40   # JWT_SECRET
-   openssl rand -hex 64   # SECRET_KEY_BASE
-   ```
-4. **Gerar ANON_KEY + SERVICE_ROLE_KEY** a partir do `JWT_SECRET`: abra https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys, cole o `JWT_SECRET` e copie as duas chaves geradas.
-5. **Editar `/opt/supabase/.env`** preenchendo tudo (uso os teus domínios):
-   - `POSTGRES_PASSWORD`, `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY`, `SECRET_KEY_BASE`, `VAULT_ENC_KEY`
-   - `DASHBOARD_USERNAME=admin` + `DASHBOARD_PASSWORD=<escolhe uma senha>`
-   - `API_EXTERNAL_URL=https://loginapi.fotonardo.com.br`
-   - `SUPABASE_PUBLIC_URL=https://loginapi.fotonardo.com.br`
-   - `SITE_URL=https://login.fotonardo.com.br`
-   - `ADDITIONAL_REDIRECT_URLS=https://login.fotonardo.com.br/**`
-   - SMTP pode deixar em branco por enquanto (email de confirmação vem depois)
-6. **Subir**:
-   ```bash
-   cd /opt/supabase
-   docker compose up -d
-   docker compose ps
-   ```
-   Espere ~2 min e confirme que todos os serviços estão `healthy` / `running`.
+```bash
+cd /opt/supabase
+curl -fsSL https://raw.githubusercontent.com/supabase/supabase/master/docker/.env.example -o .env
+```
 
-### O que me manda quando terminar
+**2. Editar `.env` com `nano .env`** e alterar **somente estas linhas** (procure cada uma com Ctrl+W no nano). Deixe todas as outras variáveis intactas:
 
-- Output de `docker compose ps` (só pra confirmar que subiu tudo)
-- Confirmação de que anotou as chaves geradas (não me manda elas)
-- Se aparecer erro em algum container, o output de `docker compose logs <nome-do-servico>`
+```env
+POSTGRES_PASSWORD=<seu-postgres-password-gerado>
+JWT_SECRET=<seu-jwt-secret-gerado>
+ANON_KEY=<sua-anon-key-gerada>
+SERVICE_ROLE_KEY=<sua-service-role-key-gerada>
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=<uma-senha-forte-pra-voce>
+SECRET_KEY_BASE=<seu-secret-key-base-gerado>
+VAULT_ENC_KEY=<seu-vault-enc-key-gerado>
 
-## Bloco 2 (depois desse) — Expor Supabase via Traefik do EasyPanel
-- Adicionar labels do Traefik no serviço `kong` do docker-compose
-- Conectar container à rede do EasyPanel
-- Validar `https://loginapi.fotonardo.com.br` com SSL
+SITE_URL=https://login.fotonardo.com.br
+ADDITIONAL_REDIRECT_URLS=https://login.fotonardo.com.br/**
+API_EXTERNAL_URL=https://loginapi.fotonardo.com.br
+SUPABASE_PUBLIC_URL=https://loginapi.fotonardo.com.br
 
-## Bloco 3 — Rodar migrations do CRM no banco novo
-- Aplicar todas as migrations em ordem (via Studio ou `psql` no container)
-- Criar bucket `whatsapp-media` + policies
-- Configurar Auth (Site URL, redirect URLs, Google OAuth)
+STUDIO_DEFAULT_ORGANIZATION=Fotonardo
+STUDIO_DEFAULT_PROJECT=CRM
+```
 
-## Bloco 4 — Evolution API
-- Redis + Evolution no EasyPanel apontando pro Postgres do Supabase
-- Domínio + SSL
+Não mexa em: `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_PORT`, `KONG_HTTP_PORT`, `KONG_HTTPS_PORT`, `POOLER_*`, `PGRST_*`, `JWT_EXPIRY`, `MAILER_*`, `ENABLE_*`, `DISABLE_SIGNUP`, `S3_*`, `REGION`, `GLOBAL_S3_BUCKET`, `STORAGE_TENANT_ID`, `IMGPROXY_*`, `FUNCTIONS_VERIFY_JWT`, `PG_META_CRYPTO_KEY` — tudo isso já tem default correto no `.env.example`.
 
-## Bloco 5 — App CRM
-- Deploy via Git no EasyPanel com Dockerfile
-- Build args (VITE_*) + env de runtime
-- Domínio + SSL
+SMTP pode ficar com os valores default (só não conseguirá enviar email de confirmação — resolvemos depois).
 
-## Bloco 6 — Amarração final
-- Cadastrar conta admin no app
-- Configurar credenciais Evolution em Configurações → WhatsApp
-- Escanear QR
-- Testar recebimento + envio + IA
-- Cron de backup diário
+**3. Zerar o volume corrompido do Postgres e subir de novo:**
 
----
+```bash
+cd /opt/supabase
+docker compose down -v
+docker compose up -d
+```
 
-Executa o **Bloco 1** e me manda o `docker compose ps`. Se travar em qualquer subpasso, cola o erro que eu destravo.
+`down -v` apaga o volume do banco (que ficou meio nascido com a config errada). Como não temos dados ainda, é seguro.
+
+**4. Aguardar ~2min e checar:**
+
+```bash
+docker compose ps
+```
+
+Todos devem ficar `Up ... (healthy)`. Se algum ficar `Restarting`, roda:
+
+```bash
+docker compose logs <nome-do-servico> --tail 50
+```
+
+### O que me mandar
+
+- Output final do `docker compose ps` (todos healthy?)
+- Se algum não subir, logs desse serviço específico
+
+Quando todos subirem, passo o Bloco 2 (expor `loginapi.fotonardo.com.br` via Traefik do EasyPanel com SSL).
