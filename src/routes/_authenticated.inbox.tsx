@@ -356,7 +356,7 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     queryKey: ["messages", conv.id],
     queryFn: async (): Promise<Message[]> => {
       const { data, error } = await supabase
-        .from("messages").select("*").eq("conversation_id", conv.id).order("created_at").limit(500);
+        .from("messages").select("*").eq("conversation_id", conv.id).is("deleted_at", null).order("created_at").limit(500);
       if (error) throw error;
       return (data ?? []) as any;
     },
