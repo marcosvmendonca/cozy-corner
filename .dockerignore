@@ -1,0 +1,16 @@
+node_modules
+.output
+.nitro
+dist
+.git
+.github
+.vscode
+.idea
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+.lovable
+supabase/.branches
+supabase/.temp
