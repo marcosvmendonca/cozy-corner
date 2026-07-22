@@ -146,7 +146,10 @@ function InboxPage() {
 
   return (
     <div className="h-full w-full overflow-hidden bg-background p-3 md:p-4">
-      <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-[360px_minmax(0,1fr)_320px] md:gap-4">
+      <div className={cn(
+        "grid h-full grid-cols-1 gap-3 md:gap-4",
+        contextOpen && selected ? "md:grid-cols-[360px_minmax(0,1fr)_320px]" : "md:grid-cols-[360px_minmax(0,1fr)]",
+      )}>
         {/* LEFT */}
         <motion.div layout className="bento-card flex min-h-0 flex-col">
           <div className="flex items-center justify-between p-4 pb-3">
@@ -238,16 +241,29 @@ function InboxPage() {
         {/* CENTER */}
         <motion.div layout className="bento-card flex min-h-0 flex-col">
           {selected ? (
-            <ChatThread conv={selected} me={me} queues={queues} />
+            <ChatThread
+              conv={selected}
+              me={me}
+              queues={queues}
+              contextOpen={contextOpen}
+              onToggleContext={() => setContextOpen((v) => !v)}
+            />
           ) : (
             <EmptyState />
           )}
         </motion.div>
 
         {/* RIGHT */}
-        <motion.div layout className="hidden min-h-0 md:flex">
-          <ContextPanel conv={selected} queues={queues} agents={agents} isAdmin={!!me?.isAdmin} />
-        </motion.div>
+        {contextOpen && selected && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="hidden min-h-0 md:flex"
+          >
+            <ContextPanel conv={selected} queues={queues} agents={agents} isAdmin={!!me?.isAdmin} onClose={() => setContextOpen(false)} />
+          </motion.div>
+        )}
       </div>
     </div>
   );
