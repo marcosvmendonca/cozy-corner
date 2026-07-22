@@ -87,3 +87,11 @@ export async function evoSetWebhook(cfg: EvoConfig, url: string) {
     },
   });
 }
+
+export async function evoFindContacts(cfg: EvoConfig) {
+  return evoRequest(cfg, `/chat/findContacts/${cfg.instance}`, {
+    method: "POST",
+    body: {},
+  });
+}
+

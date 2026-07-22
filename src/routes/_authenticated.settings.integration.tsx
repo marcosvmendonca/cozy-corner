@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSettings, updateSetting } from "@/lib/settings.functions";
 import { getWhatsAppQR, getWhatsAppStatus, registerWebhook } from "@/lib/whatsapp.functions";
-import { Loader2, QrCode, CheckCircle2, XCircle, RefreshCw, Copy } from "lucide-react";
+import { importContactsFromWhatsApp } from "@/lib/contacts.functions";
+import { Loader2, QrCode, CheckCircle2, XCircle, RefreshCw, Copy, Download } from "lucide-react";
+
 
 export const Route = createFileRoute("/_authenticated/settings/integration")({
   ssr: false,
@@ -23,6 +25,8 @@ function IntegrationSettings() {
   const qrFn = useServerFn(getWhatsAppQR);
   const statusFn = useServerFn(getWhatsAppStatus);
   const webhookFn = useServerFn(registerWebhook);
+  const importFn = useServerFn(importContactsFromWhatsApp);
+
 
   const { data: settings, isLoading } = useQuery({ queryKey: ["settings"], queryFn: () => getFn() });
 
@@ -33,7 +37,7 @@ function IntegrationSettings() {
   const [qr, setQr] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [statusState, setStatusState] = useState<string | null>(null);
-  const [loading, setLoading] = useState<null | "save" | "qr" | "status" | "hook">(null);
+  const [loading, setLoading] = useState<null | "save" | "qr" | "status" | "hook" | "import">(null);
 
   // Evolution API precisa de uma URL estável e acessível sem autenticação.
   // O host de sandbox (`*.lovableproject.com` / `id-preview--*`) redireciona por auth-bridge
@@ -93,6 +97,15 @@ function IntegrationSettings() {
       toast.success("Webhook configurado na Evolution API");
     } catch (e: any) { toast.error(e.message); } finally { setLoading(null); }
   }
+
+  async function importContacts() {
+    setLoading("import");
+    try {
+      const r = await importFn();
+      toast.success(`Importados: ${r.imported} · atualizados: ${r.updated} · ignorados: ${r.skipped}`);
+    } catch (e: any) { toast.error(e.message); } finally { setLoading(null); }
+  }
+
 
   const connected = statusState === "open" || statusState === "connected";
 
@@ -172,6 +185,16 @@ function IntegrationSettings() {
             Configurar webhook automaticamente
           </Button>
         </div>
+
+        <div className="mt-6 border-t pt-4">
+          <Label className="text-xs">Importar contatos do aparelho</Label>
+          <p className="mt-1 text-[11px] text-muted-foreground">Traz a lista de contatos do WhatsApp conectado (sem histórico de mensagens).</p>
+          <Button variant="outline" size="sm" className="mt-2 w-full" onClick={importContacts} disabled={loading === "import"}>
+            {loading === "import" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            Importar contatos agora
+          </Button>
+        </div>
+
       </motion.div>
     </div>
   );
