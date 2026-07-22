@@ -444,17 +444,30 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-3">
-        <Avatar className="h-10 w-10">
-          <AvatarFallback className="bg-brand text-brand-foreground text-xs font-semibold">{initials}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <div className="truncate text-sm font-semibold">{contactName}</div>
-          <div className="truncate text-[11px] text-muted-foreground">{conv.contacts?.phone}</div>
-        </div>
+        <button
+          onClick={onToggleContext}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 -m-1 text-left transition hover:bg-muted"
+          title="Ver dados do cliente"
+        >
+          <Avatar className="h-10 w-10">
+            <AvatarFallback className="bg-brand text-brand-foreground text-xs font-semibold">{initials}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{contactName}</div>
+            <div className="truncate text-[11px] text-muted-foreground">{conv.contacts?.phone}</div>
+          </div>
+        </button>
         {conv.status === "resolved" && <Badge variant="secondary" className="rounded-full">Resolvido</Badge>}
         <Badge variant={conv.ai_enabled ? "default" : "outline"} className="rounded-full">
           {conv.ai_enabled ? <><Sparkles className="mr-1 h-3 w-3" /> IA</> : "Manual"}
         </Badge>
+        <Button variant="outline" size="sm" onClick={handleSummarize} disabled={summarizing} title="Gerar resumo com IA">
+          {summarizing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+          Resumo IA
+        </Button>
+        <Button variant="ghost" size="icon" onClick={onToggleContext} title={contextOpen ? "Fechar painel" : "Abrir painel do cliente"}>
+          {contextOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+        </Button>
       </div>
 
       {/* Accept banner */}
