@@ -335,15 +335,18 @@ function EmptyState() {
   );
 }
 
-function ChatThread({ conv, me, queues }: {
+function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
   conv: Conversation;
   me: { id: string; isAdmin: boolean } | null | undefined;
   queues: Array<{ id: string; name: string; color: string }>;
+  contextOpen: boolean;
+  onToggleContext: () => void;
 }) {
   const qc = useQueryClient();
   const sendFn = useServerFn(sendMessage);
   const uploadFn = useServerFn(uploadMedia);
   const suggestFn = useServerFn(suggestReply);
+  const summarizeFn = useServerFn(summarizeConversation);
 
   const { data: messages = [] } = useQuery({
     queryKey: ["messages", conv.id],
