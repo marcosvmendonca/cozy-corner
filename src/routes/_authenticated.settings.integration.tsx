@@ -38,7 +38,9 @@ function IntegrationSettings() {
   const [qr, setQr] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [statusState, setStatusState] = useState<string | null>(null);
-  const [loading, setLoading] = useState<null | "save" | "qr" | "status" | "hook" | "import">(null);
+  const [loading, setLoading] = useState<null | "save" | "qr" | "status" | "hook" | "import" | "history">(null);
+  const [historyDays, setHistoryDays] = useState(30);
+  const [historyIncludeMe, setHistoryIncludeMe] = useState(true);
 
   // Evolution API precisa de uma URL estável e acessível sem autenticação.
   // O host de sandbox (`*.lovableproject.com` / `id-preview--*`) redireciona por auth-bridge
