@@ -123,3 +123,17 @@ export async function evoFindChats(cfg: EvoConfig) {
     body: {},
   });
 }
+
+export async function evoDeleteMessage(cfg: EvoConfig, key: { id: string; remoteJid: string; fromMe: boolean; participant?: string }) {
+  return evoRequest(cfg, `/chat/deleteMessageForEveryone/${cfg.instance}`, {
+    method: "DELETE",
+    body: key,
+  });
+}
+
+export async function evoEditMessage(cfg: EvoConfig, number: string, key: { id: string; remoteJid: string; fromMe: boolean }, text: string) {
+  return evoRequest(cfg, `/message/updateMessage/${cfg.instance}`, {
+    method: "POST",
+    body: { number, key, text },
+  });
+}

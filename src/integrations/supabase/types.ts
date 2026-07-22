@@ -202,7 +202,9 @@ export type Database = {
           body: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
           direction: Database["public"]["Enums"]["message_direction"]
+          edited_at: string | null
           error_message: string | null
           external_id: string | null
           id: string
@@ -219,7 +221,9 @@ export type Database = {
           body?: string | null
           conversation_id: string
           created_at?: string
+          deleted_at?: string | null
           direction: Database["public"]["Enums"]["message_direction"]
+          edited_at?: string | null
           error_message?: string | null
           external_id?: string | null
           id?: string
@@ -236,7 +240,9 @@ export type Database = {
           body?: string | null
           conversation_id?: string
           created_at?: string
+          deleted_at?: string | null
           direction?: Database["public"]["Enums"]["message_direction"]
+          edited_at?: string | null
           error_message?: string | null
           external_id?: string | null
           id?: string
