@@ -36,7 +36,7 @@ export const transferTicket = createServerFn({ method: "POST" })
     agentId: z.string().uuid().nullable().optional(),
   }).parse(i))
   .handler(async ({ context, data }) => {
-    const upd: Record<string, unknown> = {};
+    const upd: { queue_id?: string | null; assigned_agent_id?: string | null } = {};
     if (data.queueId !== undefined) upd.queue_id = data.queueId;
     if (data.agentId !== undefined) upd.assigned_agent_id = data.agentId;
     const { error } = await context.supabase
@@ -46,6 +46,7 @@ export const transferTicket = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
 
 /**
  * Resolver / reabrir ticket.
