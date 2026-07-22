@@ -207,6 +207,51 @@ function IntegrationSettings() {
           </Button>
         </div>
 
+        <div className="mt-6 border-t pt-4">
+          <Label className="text-xs">Importar histórico de mensagens</Label>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Puxa mensagens do aparelho conectado e cria tickets/conversas automaticamente. Escolha o período.
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Últimos dias</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={historyDays}
+                onChange={(e) => setHistoryDays(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Incluir enviadas</Label>
+              <select
+                value={historyIncludeMe ? "yes" : "no"}
+                onChange={(e) => setHistoryIncludeMe(e.target.value === "yes")}
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="yes">Sim (agente + cliente)</option>
+                <option value="no">Só do cliente</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {[7, 15, 30, 60, 90].map((d) => (
+              <Button key={d} type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setHistoryDays(d)}>
+                {d}d
+              </Button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" className="mt-2 w-full" onClick={importHistory} disabled={loading === "history"}>
+            {loading === "history" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <History className="mr-2 h-4 w-4" />}
+            Importar histórico ({historyDays} dias)
+          </Button>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Pode demorar alguns minutos dependendo do volume. Mensagens duplicadas são ignoradas.
+          </p>
+        </div>
+
+
       </motion.div>
     </div>
   );
