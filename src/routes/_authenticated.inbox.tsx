@@ -660,6 +660,7 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
   const [draft, setDraft] = useState(m.body ?? "");
   const [forwardOpen, setForwardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const deleted = !!(m as any).deleted_at;
   const edited = !!(m as any).edited_at;
@@ -668,9 +669,12 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
   const canDelete = out && !deleted;
 
   async function handleDelete() {
-    if (!confirm("Apagar esta mensagem para todos?")) return;
     setBusy(true);
-    try { await deleteFn({ data: { messageId: m.id } }); qc.invalidateQueries({ queryKey: ["messages", currentConversationId] }); }
+    try {
+      await deleteFn({ data: { messageId: m.id } });
+      qc.invalidateQueries({ queryKey: ["messages", currentConversationId] });
+      setConfirmDelete(false);
+    }
     catch (e: any) { toast.error(e.message); }
     finally { setBusy(false); }
   }
