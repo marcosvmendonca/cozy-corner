@@ -9,38 +9,214 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated.settings'
+import { Route as AuthenticatedInboxRouteImport } from './routes/_authenticated.inbox'
+import { Route as AuthenticatedFlowsRouteImport } from './routes/_authenticated.flows'
+import { Route as AuthenticatedContactsRouteImport } from './routes/_authenticated.contacts'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated.settings.index'
+import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated.settings.team'
+import { Route as AuthenticatedSettingsQuickRepliesRouteImport } from './routes/_authenticated.settings.quick-replies'
+import { Route as AuthenticatedSettingsIntegrationRouteImport } from './routes/_authenticated.settings.integration'
+import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated.settings.ai'
+import { Route as AuthenticatedFlowsFlowIdRouteImport } from './routes/_authenticated.flows.$flowId'
+import { Route as ApiPublicWhatsappWebhookRouteImport } from './routes/api/public/whatsapp/webhook'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedInboxRoute = AuthenticatedInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedFlowsRoute = AuthenticatedFlowsRouteImport.update({
+  id: '/flows',
+  path: '/flows',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedContactsRoute = AuthenticatedContactsRouteImport.update({
+  id: '/contacts',
+  path: '/contacts',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsTeamRoute =
+  AuthenticatedSettingsTeamRouteImport.update({
+    id: '/team',
+    path: '/team',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsQuickRepliesRoute =
+  AuthenticatedSettingsQuickRepliesRouteImport.update({
+    id: '/quick-replies',
+    path: '/quick-replies',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsIntegrationRoute =
+  AuthenticatedSettingsIntegrationRouteImport.update({
+    id: '/integration',
+    path: '/integration',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsAiRoute = AuthenticatedSettingsAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AuthenticatedSettingsRoute,
+} as any)
+const AuthenticatedFlowsFlowIdRoute =
+  AuthenticatedFlowsFlowIdRouteImport.update({
+    id: '/$flowId',
+    path: '/$flowId',
+    getParentRoute: () => AuthenticatedFlowsRoute,
+  } as any)
+const ApiPublicWhatsappWebhookRoute =
+  ApiPublicWhatsappWebhookRouteImport.update({
+    id: '/api/public/whatsapp/webhook',
+    path: '/api/public/whatsapp/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/contacts': typeof AuthenticatedContactsRoute
+  '/flows': typeof AuthenticatedFlowsRouteWithChildren
+  '/inbox': typeof AuthenticatedInboxRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/flows/$flowId': typeof AuthenticatedFlowsFlowIdRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
+  '/settings/integration': typeof AuthenticatedSettingsIntegrationRoute
+  '/settings/quick-replies': typeof AuthenticatedSettingsQuickRepliesRoute
+  '/settings/team': typeof AuthenticatedSettingsTeamRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/contacts': typeof AuthenticatedContactsRoute
+  '/flows': typeof AuthenticatedFlowsRouteWithChildren
+  '/inbox': typeof AuthenticatedInboxRoute
+  '/flows/$flowId': typeof AuthenticatedFlowsFlowIdRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
+  '/settings/integration': typeof AuthenticatedSettingsIntegrationRoute
+  '/settings/quick-replies': typeof AuthenticatedSettingsQuickRepliesRoute
+  '/settings/team': typeof AuthenticatedSettingsTeamRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/contacts': typeof AuthenticatedContactsRoute
+  '/_authenticated/flows': typeof AuthenticatedFlowsRouteWithChildren
+  '/_authenticated/inbox': typeof AuthenticatedInboxRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/_authenticated/flows/$flowId': typeof AuthenticatedFlowsFlowIdRoute
+  '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
+  '/_authenticated/settings/integration': typeof AuthenticatedSettingsIntegrationRoute
+  '/_authenticated/settings/quick-replies': typeof AuthenticatedSettingsQuickRepliesRoute
+  '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/contacts'
+    | '/flows'
+    | '/inbox'
+    | '/settings'
+    | '/flows/$flowId'
+    | '/settings/ai'
+    | '/settings/integration'
+    | '/settings/quick-replies'
+    | '/settings/team'
+    | '/settings/'
+    | '/api/public/whatsapp/webhook'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/contacts'
+    | '/flows'
+    | '/inbox'
+    | '/flows/$flowId'
+    | '/settings/ai'
+    | '/settings/integration'
+    | '/settings/quick-replies'
+    | '/settings/team'
+    | '/settings'
+    | '/api/public/whatsapp/webhook'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/contacts'
+    | '/_authenticated/flows'
+    | '/_authenticated/inbox'
+    | '/_authenticated/settings'
+    | '/_authenticated/flows/$flowId'
+    | '/_authenticated/settings/ai'
+    | '/_authenticated/settings/integration'
+    | '/_authenticated/settings/quick-replies'
+    | '/_authenticated/settings/team'
+    | '/_authenticated/settings/'
+    | '/api/public/whatsapp/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  ApiPublicWhatsappWebhookRoute: typeof ApiPublicWhatsappWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +224,142 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inbox': {
+      id: '/_authenticated/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof AuthenticatedInboxRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/flows': {
+      id: '/_authenticated/flows'
+      path: '/flows'
+      fullPath: '/flows'
+      preLoaderRoute: typeof AuthenticatedFlowsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/contacts': {
+      id: '/_authenticated/contacts'
+      path: '/contacts'
+      fullPath: '/contacts'
+      preLoaderRoute: typeof AuthenticatedContactsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/team': {
+      id: '/_authenticated/settings/team'
+      path: '/team'
+      fullPath: '/settings/team'
+      preLoaderRoute: typeof AuthenticatedSettingsTeamRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/quick-replies': {
+      id: '/_authenticated/settings/quick-replies'
+      path: '/quick-replies'
+      fullPath: '/settings/quick-replies'
+      preLoaderRoute: typeof AuthenticatedSettingsQuickRepliesRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/integration': {
+      id: '/_authenticated/settings/integration'
+      path: '/integration'
+      fullPath: '/settings/integration'
+      preLoaderRoute: typeof AuthenticatedSettingsIntegrationRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/ai': {
+      id: '/_authenticated/settings/ai'
+      path: '/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AuthenticatedSettingsAiRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/flows/$flowId': {
+      id: '/_authenticated/flows/$flowId'
+      path: '/$flowId'
+      fullPath: '/flows/$flowId'
+      preLoaderRoute: typeof AuthenticatedFlowsFlowIdRouteImport
+      parentRoute: typeof AuthenticatedFlowsRoute
+    }
+    '/api/public/whatsapp/webhook': {
+      id: '/api/public/whatsapp/webhook'
+      path: '/api/public/whatsapp/webhook'
+      fullPath: '/api/public/whatsapp/webhook'
+      preLoaderRoute: typeof ApiPublicWhatsappWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface AuthenticatedFlowsRouteChildren {
+  AuthenticatedFlowsFlowIdRoute: typeof AuthenticatedFlowsFlowIdRoute
+}
+
+const AuthenticatedFlowsRouteChildren: AuthenticatedFlowsRouteChildren = {
+  AuthenticatedFlowsFlowIdRoute: AuthenticatedFlowsFlowIdRoute,
+}
+
+const AuthenticatedFlowsRouteWithChildren =
+  AuthenticatedFlowsRoute._addFileChildren(AuthenticatedFlowsRouteChildren)
+
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
+  AuthenticatedSettingsIntegrationRoute: typeof AuthenticatedSettingsIntegrationRoute
+  AuthenticatedSettingsQuickRepliesRoute: typeof AuthenticatedSettingsQuickRepliesRoute
+  AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+}
+
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
+  AuthenticatedSettingsIntegrationRoute: AuthenticatedSettingsIntegrationRoute,
+  AuthenticatedSettingsQuickRepliesRoute:
+    AuthenticatedSettingsQuickRepliesRoute,
+  AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+}
+
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedContactsRoute: typeof AuthenticatedContactsRoute
+  AuthenticatedFlowsRoute: typeof AuthenticatedFlowsRouteWithChildren
+  AuthenticatedInboxRoute: typeof AuthenticatedInboxRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedContactsRoute: AuthenticatedContactsRoute,
+  AuthenticatedFlowsRoute: AuthenticatedFlowsRouteWithChildren,
+  AuthenticatedInboxRoute: AuthenticatedInboxRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  AuthRoute: AuthRoute,
+  ApiPublicWhatsappWebhookRoute: ApiPublicWhatsappWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
