@@ -4,10 +4,12 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { to: "/settings/integration", label: "WhatsApp" },
+  { to: "/settings/queues", label: "Filas" },
   { to: "/settings/ai", label: "IA" },
   { to: "/settings/quick-replies", label: "Respostas rápidas" },
   { to: "/settings/team", label: "Equipe" },
 ] as const;
+
 
 export const Route = createFileRoute("/_authenticated/settings")({
   ssr: false,
