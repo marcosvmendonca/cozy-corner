@@ -20,7 +20,7 @@ export const getWhatsAppQR = createServerFn({ method: "POST" })
     // Evolution returns { base64, code, count } (varies by version)
     const qr = d?.base64 ?? d?.qrcode?.base64 ?? d?.qr ?? null;
     const pairingCode = d?.pairingCode ?? d?.code ?? null;
-    return { qr, pairingCode, raw: d };
+    return { qr: (qr as string | null), pairingCode: (pairingCode as string | null) };
   });
 
 export const getWhatsAppStatus = createServerFn({ method: "GET" })
@@ -29,9 +29,10 @@ export const getWhatsAppStatus = createServerFn({ method: "GET" })
     await requireAdmin(context);
     const { fetchEvoConfig, evoStatus } = await import("./whatsapp.server");
     const cfg = await fetchEvoConfig();
-    if (!cfg) return { configured: false, state: null };
+    if (!cfg) return { configured: false, state: null as string | null };
     const s = await evoStatus(cfg);
-    return { configured: true, state: (s.data as any)?.instance?.state ?? (s.data as any)?.state ?? null, raw: s.data };
+    const state = ((s.data as any)?.instance?.state ?? (s.data as any)?.state ?? null) as string | null;
+    return { configured: true, state };
   });
 
 export const registerWebhook = createServerFn({ method: "POST" })
@@ -42,7 +43,8 @@ export const registerWebhook = createServerFn({ method: "POST" })
     const { fetchEvoConfig, evoSetWebhook } = await import("./whatsapp.server");
     const cfg = await fetchEvoConfig();
     if (!cfg) throw new Error("Configure a Evolution API primeiro");
-    return await evoSetWebhook(cfg, data.webhookUrl);
+    const r = await evoSetWebhook(cfg, data.webhookUrl);
+    return { ok: r.ok, status: r.status };
   });
 
 const SendInput = z.object({

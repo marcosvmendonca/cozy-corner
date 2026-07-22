@@ -7,14 +7,14 @@ export const getSettings = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase.from("settings").select("key, value");
     if (error) throw error;
-    const map: Record<string, unknown> = {};
-    for (const row of data ?? []) map[row.key] = row.value;
-    return map;
+    const map: Record<string, any> = {};
+    for (const row of data ?? []) map[row.key] = row.value as any;
+    return map as Record<string, any>;
   });
 
 const UpdateInput = z.object({
   key: z.enum(["ai", "whatsapp"]),
-  value: z.record(z.unknown()),
+  value: z.record(z.any()),
 });
 
 export const updateSetting = createServerFn({ method: "POST" })
@@ -31,7 +31,7 @@ export const updateSetting = createServerFn({ method: "POST" })
 
     const { error } = await context.supabase
       .from("settings")
-      .update({ value: data.value, updated_by: context.userId, updated_at: new Date().toISOString() })
+      .update({ value: data.value as any, updated_by: context.userId, updated_at: new Date().toISOString() })
       .eq("key", data.key);
     if (error) throw error;
     return { ok: true };

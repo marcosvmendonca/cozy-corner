@@ -64,7 +64,7 @@ export const summarizeConversation = createServerFn({ method: "POST" })
     const { conv, msgs } = await loadConversation(context.supabase, data.conversationId);
     const messages = [
       { role: "system", content: `Resuma a conversa em 3 frases curtas em português. Depois extraia dados do cliente em JSON. Responda APENAS um JSON válido com o formato: {"summary": "...", "data": {"name": "...", "email": "...", "intent": "...", "tags": ["..."]}}. Use null quando não souber.` },
-      { role: "user", content: msgs.map((m) => `${m.direction === "in" ? "Cliente" : "Atendente"}: ${m.body ?? `[${m.type}]`}`).join("\n") },
+      { role: "user", content: msgs.map((m: any) => `${m.direction === "in" ? "Cliente" : "Atendente"}: ${m.body ?? `[${m.type}]`}`).join("\n") },
     ];
     const raw = await callAI(messages, { json: true });
     let parsed: any = {};
