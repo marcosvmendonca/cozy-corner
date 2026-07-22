@@ -109,6 +109,15 @@ function IntegrationSettings() {
     } catch (e: any) { toast.error(e.message); } finally { setLoading(null); }
   }
 
+  async function importHistory() {
+    setLoading("history");
+    try {
+      const r = await importHistoryFn({ data: { days: historyDays, limit: 2000, includeFromMe: historyIncludeMe } });
+      toast.success(`${r.messages} mensagens · ${r.conversations} conversas · ${r.contacts} contatos novos`);
+      qc.invalidateQueries();
+    } catch (e: any) { toast.error(e.message); } finally { setLoading(null); }
+  }
+
 
   const connected = statusState === "open" || statusState === "connected";
 
