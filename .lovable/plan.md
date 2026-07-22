@@ -1,114 +1,79 @@
 
-# CRM WhatsApp — Fase 1
+# Deploy passo-a-passo — Fase atual: Supabase self-host
 
-Foco: base sólida com **inbox multi-atendente + construtor de fluxo + IA de atendimento**, integrada via conector WhatsApp Business (Sinch). Envio/recebimento de áudio, iniciar conversas e "extras" ficam para a fase 2, mas a arquitetura já será preparada.
+DNS + EasyPanel prontos. Próximo bloco é subir o Supabase na VPS. Vou te guiar em blocos pequenos — você executa, cola o resultado, eu destravo o próximo.
 
-## O que você terá no final da fase 1
+## Bloco 1 (agora) — Subir Supabase via docker-compose
 
-- **Login e equipe**: cadastro/login por email+senha e Google. Papéis: `admin` (gerencia equipe, fluxos, integração) e `agent` (atende conversas). Admin convida atendentes por email.
-- **Inbox estilo WhatsApp Web (bento grid)**:
-  - Painel esquerdo: filas de conversas (Aguardando, Minhas, Todas, Resolvidas), busca e filtros por tag.
-  - Painel central: thread da conversa, envio de texto, emojis, anexos de imagem/documento e **gravação/envio de áudio** (via microfone do navegador → upload → envio pela API do WhatsApp).
-  - Painel direito (bento): dados do contato, resumo da IA, tags, atendente atribuído, histórico.
-  - Barra de respostas rápidas com atalho `/` (snippets salvos por atendente e por equipe).
-- **Iniciar conversas** (dentro das regras do WhatsApp Business): enviar mensagem ativa usando templates aprovados, ou continuar dentro da janela de 24h.
-- **IA de atendimento** (Lovable AI Gateway, sem chave externa):
-  - **Sugerir resposta**: botão "Sugerir" na thread; atendente edita/envia.
-  - **Auto-atender no início**: quando uma nova conversa entra e nenhum atendente está atribuído, a IA responde as primeiras N mensagens seguindo um prompt-base + fluxo ativo, até o cliente pedir humano, a IA detectar handoff, ou o admin desativar.
-  - **Resumir + extrair dados**: nome, email, telefone secundário, intenção e tags automáticas — salvos no card do contato e recalculados quando a conversa avança.
-- **Construtor de fluxo visual**:
-  - Canvas com nós (React Flow): `Gatilho` (nova conversa / palavra-chave), `Mensagem`, `Pergunta` (aguarda resposta do cliente), `Condição` (regra sobre a resposta), `Ação` (atribuir a atendente, aplicar tag, encerrar, chamar IA).
-  - Ligações do tipo "resposta X → próximo nó Y".
-  - Publicar/despublicar fluxo; um fluxo ativo por vez na fase 1.
-  - Simulador embutido para testar o fluxo antes de publicar.
-- **Visual bento grid, responsivo, animado**: layout em blocos com cantos generosos, camadas de sombra/gradiente sutis, transições suaves com Motion (aparição de mensagens, contadores, painéis deslizantes, hover nos cards do bento). Design definido a partir de opções visuais (ver Aprovação do design abaixo).
+Isso segue a seção **4.2 → 4.4** do `DEPLOY.md`. Prefiro docker-compose direto por SSH em vez de app do EasyPanel — é o método oficial do Supabase e evita dor de cabeça com o Traefik do painel na primeira subida.
 
-## Como as peças se conectam
+### Passos que você executa
 
-```text
-Cliente WhatsApp ──▶ Sinch (WhatsApp Business API)
-                        │
-                        ▼
-        Webhook público /api/public/whatsapp/webhook
-                        │
-        ┌───────────────┼────────────────┐
-        ▼               ▼                ▼
-   Salva msg      Roda fluxo ativo   Dispara IA
-   (Lovable Cloud) (se aplicável)   (sugerir/auto)
-        │
-        ▼
-   Realtime → UI do atendente (inbox)
-        │
-        ▼
-   Atendente responde ──▶ server fn ──▶ Sinch API ──▶ Cliente
-```
+1. **SSH na VPS** como root (ou usuário com docker).
+2. Clonar e preparar o diretório:
+   ```bash
+   mkdir -p /opt/supabase && cd /opt/supabase
+   git clone --depth 1 https://github.com/supabase/supabase.git
+   cp -R supabase/docker/* .
+   cp supabase/docker/.env.example .env
+   rm -rf supabase
+   ```
+3. **Gerar segredos** (rode e guarde cada um num bloco de notas):
+   ```bash
+   openssl rand -hex 32   # POSTGRES_PASSWORD
+   openssl rand -hex 32   # VAULT_ENC_KEY
+   openssl rand -hex 40   # JWT_SECRET
+   openssl rand -hex 64   # SECRET_KEY_BASE
+   ```
+4. **Gerar ANON_KEY + SERVICE_ROLE_KEY** a partir do `JWT_SECRET`: abra https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys, cole o `JWT_SECRET` e copie as duas chaves geradas.
+5. **Editar `/opt/supabase/.env`** preenchendo tudo (uso os teus domínios):
+   - `POSTGRES_PASSWORD`, `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY`, `SECRET_KEY_BASE`, `VAULT_ENC_KEY`
+   - `DASHBOARD_USERNAME=admin` + `DASHBOARD_PASSWORD=<escolhe uma senha>`
+   - `API_EXTERNAL_URL=https://loginapi.fotonardo.com.br`
+   - `SUPABASE_PUBLIC_URL=https://loginapi.fotonardo.com.br`
+   - `SITE_URL=https://login.fotonardo.com.br`
+   - `ADDITIONAL_REDIRECT_URLS=https://login.fotonardo.com.br/**`
+   - SMTP pode deixar em branco por enquanto (email de confirmação vem depois)
+6. **Subir**:
+   ```bash
+   cd /opt/supabase
+   docker compose up -d
+   docker compose ps
+   ```
+   Espere ~2 min e confirme que todos os serviços estão `healthy` / `running`.
 
-## Fluxo de decisões do time
+### O que me manda quando terminar
 
-- **Backend**: Lovable Cloud (Postgres + Auth + Storage + Realtime), obrigatório para login multi-usuário, histórico, áudios e webhook.
-- **WhatsApp**: conector **WhatsApp Business via Sinch** (linkado ao projeto). Webhook público em `/api/public/whatsapp/webhook` com verificação de assinatura.
-- **IA**: Lovable AI Gateway com `google/gemini-3-flash-preview` (padrão) para sugerir respostas, atender e resumir. Sem chave adicional do usuário.
-- **Áudio**: gravação no navegador (MediaRecorder) → upload para Storage privado → URL assinada → envio como mensagem de mídia via Sinch. Áudios recebidos são armazenados igualmente e reproduzidos na thread. (Transcrição automática de áudio recebido não foi marcada — fica desligada nesta fase, mas o botão "Transcrever" fica disponível sob demanda.)
+- Output de `docker compose ps` (só pra confirmar que subiu tudo)
+- Confirmação de que anotou as chaves geradas (não me manda elas)
+- Se aparecer erro em algum container, o output de `docker compose logs <nome-do-servico>`
 
-## Modelo de dados (Lovable Cloud)
+## Bloco 2 (depois desse) — Expor Supabase via Traefik do EasyPanel
+- Adicionar labels do Traefik no serviço `kong` do docker-compose
+- Conectar container à rede do EasyPanel
+- Validar `https://loginapi.fotonardo.com.br` com SSL
 
-- `profiles` (id = auth.users.id, nome, avatar, papel padrão).
-- `user_roles` (user_id, role: `admin`|`agent`) — separado do profile por segurança; policies via `has_role()`.
-- `contacts` (telefone E.164, nome, dados extraídos pela IA, tags[]).
-- `conversations` (contact_id, status: `waiting`|`open`|`resolved`, assigned_agent_id, last_message_at, ai_summary).
-- `messages` (conversation_id, direção `in`/`out`, tipo `text`/`image`/`document`/`audio`, corpo, media_path, sinch_id, sent_by: `customer`|`agent`|`ai`|`flow`, created_at).
-- `quick_replies` (owner scope: user ou team, shortcut, body).
-- `templates` (nome, idioma, corpo, status de aprovação Sinch/Meta).
-- `flows` (nome, ativo, versão) + `flow_nodes` + `flow_edges` (grafo do builder).
-- `flow_runs` (conversation_id, flow_id, current_node_id, contexto de variáveis) — estado por conversa.
-- `tags` (nome, cor).
+## Bloco 3 — Rodar migrations do CRM no banco novo
+- Aplicar todas as migrations em ordem (via Studio ou `psql` no container)
+- Criar bucket `whatsapp-media` + policies
+- Configurar Auth (Site URL, redirect URLs, Google OAuth)
 
-Todas as tabelas com RLS: cada atendente vê contatos/conversas atribuídas a ele ou não atribuídas; admin vê tudo. Grants `authenticated` + `service_role`. Webhook usa service role só após verificar assinatura.
+## Bloco 4 — Evolution API
+- Redis + Evolution no EasyPanel apontando pro Postgres do Supabase
+- Domínio + SSL
 
-## Rotas do app
+## Bloco 5 — App CRM
+- Deploy via Git no EasyPanel com Dockerfile
+- Build args (VITE_*) + env de runtime
+- Domínio + SSL
 
-- `/auth` — login/cadastro (email+senha, Google via broker gerenciado).
-- `/` — redireciona logado para `/inbox`; deslogado para `/auth`.
-- `/inbox` — inbox principal (bento grid com 3 painéis).
-- `/inbox/$conversationId` — conversa focada.
-- `/contacts` — lista de contatos + iniciar nova conversa (por template).
-- `/flows` — lista de fluxos.
-- `/flows/$flowId` — editor visual (React Flow) + simulador.
-- `/quick-replies` — gerenciar respostas rápidas (pessoal + equipe).
-- `/settings/team` — admin: convidar/remover atendentes, atribuir papéis.
-- `/settings/integrations` — status da conexão Sinch, número do WhatsApp, templates.
-- `/settings/ai` — prompt base da IA, comportamento (sugerir vs. auto-atender), palavras de handoff.
-- `/api/public/whatsapp/webhook` — receber eventos Sinch (verificação de assinatura).
+## Bloco 6 — Amarração final
+- Cadastrar conta admin no app
+- Configurar credenciais Evolution em Configurações → WhatsApp
+- Escanear QR
+- Testar recebimento + envio + IA
+- Cron de backup diário
 
-## Aprovação do design (antes de codar a UI)
+---
 
-Depois deste plano ser aprovado, vou:
-1. Gerar 2–3 direções visuais bento grid animado (paleta, densidade, sensação — algo tipo "cockpit calmo") e você escolhe uma.
-2. Só então construir a UI conforme a escolhida.
-
-## Fora do escopo desta fase (fica para depois)
-
-- Transferência entre setores/times.
-- Múltiplos fluxos ativos simultâneos + versionamento avançado.
-- Relatórios/BI, SLA, horários de atendimento.
-- Transcrição automática de todos os áudios recebidos (fica manual sob demanda).
-- Chatbot com botões nativos do WhatsApp e listas — entra na fase 2.
-- Aprovação de templates dentro do app (por enquanto, apontamos os já aprovados no Sinch).
-
-## Detalhes técnicos (para referência)
-
-- Stack: TanStack Start (SSR), Lovable Cloud (Supabase gerenciado), Tailwind v4, Motion para animações, React Flow para o builder, shadcn/ui como base, AI Elements onde couber para a UI do painel de IA.
-- Segurança: RLS em todas as tabelas; roles em `user_roles` + `has_role()` security definer; webhook verifica HMAC do Sinch antes de gravar; áudios em bucket privado com URLs assinadas.
-- IA: chamadas server-side via `createServerFn`; sem exposição de chave no browser. Streaming de sugestão via `useChat`/`streamText` no painel direito.
-- Envio ao WhatsApp: `createServerFn` protegido → gateway `standard_connectors` do Sinch → API oficial. Erros do provedor (fora da janela de 24h, template não aprovado, número inválido) são exibidos ao atendente com ação sugerida.
-- Realtime: `supabase.channel` por conversa e por caixa de entrada, para novas mensagens e mudanças de atribuição.
-
-## Próximos passos após aprovação
-
-1. Habilitar Lovable Cloud e conectar o conector Sinch (vou te guiar pelo popup).
-2. Criar schema + RLS + roles.
-3. Gerar direções visuais bento grid, você escolhe uma.
-4. Construir: auth + inbox + envio/recebimento (texto e áudio) + webhook.
-5. Adicionar respostas rápidas + IA (sugerir, auto-atender, resumir).
-6. Adicionar o construtor de fluxo + runner.
-7. Configurações (equipe, integração, IA) e polir animações do bento.
+Executa o **Bloco 1** e me manda o `docker compose ps`. Se travar em qualquer subpasso, cola o erro que eu destravo.
