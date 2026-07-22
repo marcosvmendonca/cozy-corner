@@ -505,15 +505,56 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
               .then((up) => sendMut.mutate({ mediaUrl: up.url, mediaType: "audio" }))
               .catch((e) => toast.error("Áudio: " + e.message));
           }} />
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder={waiting ? "Aceite o ticket para responder..." : "Digite uma mensagem..."}
-            className="min-h-[40px] flex-1 resize-none"
-            rows={1}
-            disabled={waiting}
-          />
+          <div className="relative flex-1">
+            {slashOpen && slashResults.length > 0 && (
+              <div className="absolute bottom-full left-0 right-0 z-20 mb-2 max-h-60 overflow-auto rounded-xl border bg-popover shadow-lg">
+                <div className="border-b px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Respostas rápidas
+                </div>
+                {slashResults.map((q: any, i: number) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onMouseEnter={() => setSlashIdx(i)}
+                    onClick={() => applyQuickReply(q.body)}
+                    className={cn(
+                      "flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition",
+                      i === slashIdx ? "bg-accent" : "hover:bg-muted",
+                    )}
+                  >
+                    <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-xs font-semibold">/{q.shortcut}</div>
+                      <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{q.body}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {slashOpen && slashResults.length === 0 && (
+              <div className="absolute bottom-full left-0 right-0 z-20 mb-2 rounded-xl border bg-popover px-3 py-2 text-xs text-muted-foreground shadow-lg">
+                Nenhuma resposta rápida com "/{slashQuery}". <Link to="/settings/quick-replies" className="text-brand hover:underline">Criar</Link>
+              </div>
+            )}
+            <Textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (slashOpen && slashResults.length > 0) {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setSlashIdx((i) => (i + 1) % slashResults.length); return; }
+                  if (e.key === "ArrowUp") { e.preventDefault(); setSlashIdx((i) => (i - 1 + slashResults.length) % slashResults.length); return; }
+                  if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyQuickReply((slashResults[slashIdx] as any).body); return; }
+                  if (e.key === "Escape") { e.preventDefault(); setText(text.replace(/(^|\s)\/(\S*)$/, "$1")); return; }
+                }
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+              }}
+              placeholder={waiting ? "Aceite o ticket para responder..." : "Digite uma mensagem... (use / para respostas rápidas)"}
+              className="min-h-[40px] w-full resize-none"
+              rows={1}
+              disabled={waiting}
+            />
+          </div>
           <Button variant="outline" size="icon" onClick={handleSuggest} disabled={suggesting || waiting} title="Sugestão da IA">
             {suggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           </Button>
