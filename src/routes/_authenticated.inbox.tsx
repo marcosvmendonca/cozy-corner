@@ -487,7 +487,7 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
 
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-gradient-to-b from-transparent to-muted/30 px-4 py-4">
         <AnimatePresence initial={false}>
-          {messages.map((m) => (<MessageBubble key={m.id} m={m} />))}
+          {messages.map((m) => (<MessageBubble key={m.id} m={m} currentConversationId={conv.id} />))}
         </AnimatePresence>
       </div>
 
