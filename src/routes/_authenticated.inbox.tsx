@@ -436,8 +436,9 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
   const fileStickerRef = useRef<HTMLInputElement>(null);
 
   const sendMut = useMutation({
-    mutationFn: async (payload: { text?: string; mediaUrl?: string; mediaType?: any; fileName?: string }) => {
-      return sendFn({ data: { conversationId: conv.id, ...payload } });
+    mutationFn: async (payload: { text?: string; mediaUrl?: string; mediaType?: any; fileName?: string; previewUrl?: string }) => {
+      const { previewUrl: _p, ...rest } = payload;
+      return sendFn({ data: { conversationId: conv.id, ...rest } });
     },
     onMutate: async (payload) => {
       await qc.cancelQueries({ queryKey: ["messages", conv.id] });
@@ -449,8 +450,8 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
         conversation_id: conv.id,
         direction: "out",
         type,
-        body: payload.text ?? null,
-        media_url: payload.mediaUrl ?? null,
+        body: payload.text ?? payload.fileName ?? null,
+        media_url: payload.previewUrl ?? payload.mediaUrl ?? null,
         sent_by: "agent",
         sender_user_id: me?.id ?? null,
         external_id: null,
@@ -463,8 +464,15 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
       qc.setQueryData<Message[]>(["messages", conv.id], [...prev, optimistic]);
       return { tempId };
     },
-    onSuccess: (res) => {
+    onSuccess: (res, vars) => {
       if (!res.sent) toast.error("Falha ao enviar: " + (res.errorMessage ?? "erro"));
+      else if (vars.mediaType) {
+        const labels: Record<string, string> = {
+          image: "Imagem enviada", video: "Vídeo enviado", audio: "Áudio enviado",
+          document: "Documento enviado", sticker: "Figurinha enviada",
+        };
+        toast.success(labels[vars.mediaType] ?? "Mensagem enviada");
+      }
       qc.invalidateQueries({ queryKey: ["messages", conv.id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
     },
