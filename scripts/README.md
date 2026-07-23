@@ -45,7 +45,7 @@ Ou clone o repo e rode direto: `sudo bash scripts/install-supabase.sh`.
 | **SITE_URL** | URL do frontend (usada em redirects do Auth). | `https://crm2.seudominio.com` |
 | **Publicar Kong via Traefik?** | Se sim, o script gera `docker-compose.override.yml` com labels do Traefik e conecta o Kong à rede do EasyPanel — não precisa criar App proxy no EasyPanel. | `y` |
 | **Rede Traefik do EasyPanel** | Nome da rede docker externa onde o Traefik do EasyPanel escuta. Confira com `docker network ls`. | `easypanel-traefik` |
-| **Entrypoint HTTPS** | Nome do entrypoint HTTPS no Traefik. | `websecure` |
+| **Entrypoint HTTPS** | Nome do entrypoint HTTPS no Traefik. EasyPanel usa `https`. | `https` |
 | **Cert resolver** | Nome do resolver Let's Encrypt configurado no Traefik do EasyPanel. | `letsencrypt` |
 
 ---
