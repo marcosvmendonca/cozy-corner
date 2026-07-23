@@ -68,6 +68,24 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
             const msg = raw?.message ?? {};
             const pushName: string | undefined = raw?.pushName;
 
+            // Edit arriving as protocolMessage inside upsert
+            const proto = msg?.protocolMessage;
+            if (proto?.editedMessage || proto?.type === 14 || proto?.type === "MESSAGE_EDIT") {
+              const editedId = proto?.key?.id;
+              const newText: string | null =
+                proto?.editedMessage?.conversation ??
+                proto?.editedMessage?.extendedTextMessage?.text ??
+                proto?.editedMessage?.message?.conversation ??
+                proto?.editedMessage?.message?.extendedTextMessage?.text ?? null;
+              if (editedId && newText) {
+                await supabaseAdmin.from("messages")
+                  .update({ body: newText, edited_at: new Date().toISOString() })
+                  .eq("external_id", editedId);
+              }
+              continue;
+            }
+
+
             let type: "text" | "image" | "audio" | "video" | "document" | "sticker" = "text";
             let body: string | null = null;
             let mediaUrl: string | null = null;
