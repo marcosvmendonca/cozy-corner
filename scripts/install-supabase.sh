@@ -122,6 +122,11 @@ echo "  kong http:   $KONG_HTTP"
 echo "  kong https:  $KONG_HTTPS"
 echo "  api url:     $API_URL"
 echo "  site url:    $SITE_URL"
+if [[ "$USE_TRAEFIK" == "y" ]]; then
+  echo "  traefik:     host=$TRAEFIK_HOST rede=$TRAEFIK_NETWORK entry=$TRAEFIK_ENTRYPOINT resolver=$TRAEFIK_CERTRESOLVER"
+else
+  echo "  traefik:     (desabilitado — publique o Kong manualmente)"
+fi
 if [[ -n "$GH_URL" ]]; then
   echo "  github:      $GH_URL ($GH_BRANCH) — migrations em $GH_SUBDIR"
 else
