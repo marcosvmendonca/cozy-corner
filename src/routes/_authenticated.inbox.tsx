@@ -1046,32 +1046,108 @@ function ForwardDialog({ messageId, currentConversationId, open, onOpenChange }:
   );
 }
 
-function AudioRecorder({ onRecorded }: { onRecorded: (dataUrl: string, mime: string) => void }) {
+function AudioRecorder({ onRecorded, disabled }: { onRecorded: (dataUrl: string, mime: string) => void; disabled?: boolean }) {
   const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<BlobPart[]>([]);
+  const cancelledRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+
   async function start() {
     try {
+      cancelledRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
       const mr = new MediaRecorder(stream, { mimeType: mime });
       chunks.current = [];
       mr.ondataavailable = (e) => chunks.current.push(e.data);
       mr.onstop = () => {
-        const blob = new Blob(chunks.current, { type: mime });
         stream.getTracks().forEach((t) => t.stop());
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (cancelledRef.current) { setSeconds(0); return; }
+        const blob = new Blob(chunks.current, { type: mime });
         const reader = new FileReader();
         reader.onload = () => onRecorded(reader.result as string, mime);
         reader.readAsDataURL(blob);
+        setSeconds(0);
       };
-      mr.start(); recRef.current = mr; setRecording(true);
+      mr.start();
+      recRef.current = mr;
+      setRecording(true);
+      setSeconds(0);
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch (e: any) { toast.error("Microfone: " + e.message); }
   }
   function stop() { recRef.current?.stop(); setRecording(false); }
+  function cancel() { cancelledRef.current = true; recRef.current?.stop(); setRecording(false); }
+
+  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  if (!recording) {
+    return (
+      <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground" onClick={start} disabled={disabled} title="Gravar áudio">
+        <Mic className="h-4 w-4" />
+      </Button>
+    );
+  }
   return (
-    <Button type="button" variant={recording ? "destructive" : "outline"} size="icon" onClick={recording ? stop : start} title={recording ? "Parar" : "Gravar"}>
-      {recording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-    </Button>
+    <div className="flex items-center gap-1 rounded-xl border border-destructive/50 bg-destructive/10 px-2 py-1">
+      <motion.span
+        className="h-2 w-2 rounded-full bg-destructive"
+        animate={{ opacity: [1, 0.3, 1], scale: [1, 1.15, 1] }}
+        transition={{ duration: 1.1, repeat: Infinity }}
+      />
+      <span className="min-w-[40px] font-mono text-xs tabular-nums text-destructive">{fmt(seconds)}</span>
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/20" onClick={cancel} title="Cancelar">
+        <X className="h-4 w-4" />
+      </Button>
+      <Button type="button" size="icon" className="h-8 w-8 bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={stop} title="Enviar áudio">
+        <Send className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function ContactCardDialog({ open, onOpenChange, onSend }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSend: (name: string, phone: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !phone.trim()) return;
+    onSend(name.trim(), phone.trim());
+    setName(""); setPhone("");
+    onOpenChange(false);
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Enviar contato</DialogTitle>
+          <DialogDescription>Compartilhe nome e telefone.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">Nome</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">Telefone</label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+55 11 99999-8888" required />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button type="submit">Enviar</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
