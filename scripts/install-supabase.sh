@@ -346,8 +346,8 @@ Diretório:          ${TARGET}
 Compose project:    ${COMPOSE_PROJECT_NAME}
 
 Próximos passos:
-  1. Apontar subdomínio (ex: api-${PROJECT}.seudominio.com) pra porta ${KONG_HTTP}
-     via Traefik/EasyPanel com HTTPS.
+  1. DNS: aponte ${TRAEFIK_HOST:-<seu-subdominio>} → IP da VPS (A record).
+     $( [[ "$USE_TRAEFIK" == "y" ]] && echo "Traefik já foi configurado via override; o cert é emitido no primeiro acesso." || echo "Publique o Kong (porta ${KONG_HTTP}) via EasyPanel/Traefik com HTTPS." )
   2. Se mudar o domínio público, edite API_EXTERNAL_URL / SUPABASE_PUBLIC_URL /
      SITE_URL em ${TARGET}/.env e rode:
        docker compose --project-name ${COMPOSE_PROJECT_NAME} up -d
