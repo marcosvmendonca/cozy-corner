@@ -66,6 +66,9 @@ fi
 
 KONG_HTTP=$(ask  "Porta HTTP do Kong"  "8100")
 KONG_HTTPS=$(ask "Porta HTTPS do Kong" "8543")
+POSTGRES_PORT_HOST=$(ask "Porta do Postgres no host (supavisor session)"     "5532")
+POOLER_PORT_HOST=$(ask   "Porta do pooler no host (supavisor transaction)"   "6643")
+ANALYTICS_PORT_HOST=$(ask "Porta do analytics/logflare no host"              "4100")
 
 echo
 echo "Se você tem um repo GitHub com migrations em supabase/migrations,"
@@ -179,6 +182,11 @@ sedi KONG_HTTP_PORT          "$KONG_HTTP"
 sedi KONG_HTTPS_PORT         "$KONG_HTTPS"
 sedi LOGFLARE_PUBLIC_ACCESS_TOKEN  "$LOGFLARE_PUBLIC"
 sedi LOGFLARE_PRIVATE_ACCESS_TOKEN "$LOGFLARE_PRIVATE"
+
+# portas do host (evita colisão entre múltiplos stacks supabase na mesma VPS)
+if grep -q '^POSTGRES_PORT=' .env; then sedi POSTGRES_PORT "$POSTGRES_PORT_HOST"; else echo "POSTGRES_PORT=${POSTGRES_PORT_HOST}" >> .env; fi
+if grep -q '^POOLER_PROXY_PORT_TRANSACTION=' .env; then sedi POOLER_PROXY_PORT_TRANSACTION "$POOLER_PORT_HOST"; else echo "POOLER_PROXY_PORT_TRANSACTION=${POOLER_PORT_HOST}" >> .env; fi
+if grep -q '^ANALYTICS_HOST_PORT=' .env; then sedi ANALYTICS_HOST_PORT "$ANALYTICS_PORT_HOST"; fi
 
 sedi API_EXTERNAL_URL        "$API_URL"
 sedi SUPABASE_PUBLIC_URL     "$API_URL"
