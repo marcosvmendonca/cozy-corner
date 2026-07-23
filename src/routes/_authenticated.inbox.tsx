@@ -102,7 +102,20 @@ function InboxPage() {
     },
     refetchInterval: 8000,
     refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
   });
+
+  function prefetchMessages(convId: string) {
+    qc.prefetchQuery({
+      queryKey: ["messages", convId],
+      queryFn: async () => {
+        const { data } = await supabase
+          .from("messages").select("*").eq("conversation_id", convId).is("deleted_at", null).order("created_at").limit(500);
+        return (data ?? []) as Message[];
+      },
+      staleTime: 3000,
+    });
+  }
 
   useEffect(() => {
     const ch = supabase
