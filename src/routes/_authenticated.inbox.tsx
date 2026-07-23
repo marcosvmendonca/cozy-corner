@@ -97,6 +97,8 @@ function InboxPage() {
       if (error) throw error;
       return (data ?? []) as any;
     },
+    refetchInterval: 8000,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {
