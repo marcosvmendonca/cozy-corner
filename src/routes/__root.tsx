@@ -112,7 +112,15 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    // Push current JWT into Realtime so RLS lets broadcasts through (self-hosted Supabase).
+    supabase.auth.getSession().then(({ data }) => {
+      const token = data.session?.access_token;
+      if (token) supabase.realtime.setAuth(token);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "TOKEN_REFRESHED" || event === "SIGNED_IN") && session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+      }
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
