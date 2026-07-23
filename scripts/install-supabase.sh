@@ -195,6 +195,14 @@ grep -q '^ENABLE_EMAIL_AUTOCONFIRM=' .env \
 export COMPOSE_PROJECT_NAME="supabase_${PROJECT}"
 echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" > .compose-env
 
+# Remove `container_name:` fixos do compose (senão colide com outros projetos
+# supabase já rodando na mesma VPS — ex: supabase-imgproxy já em uso).
+# Sem essa linha, o docker gera nomes prefixados com $COMPOSE_PROJECT_NAME.
+if grep -q '^\s*container_name:' docker-compose.yml; then
+  echo "  removendo container_name fixos do docker-compose.yml (evita colisão entre projetos)"
+  sed -i '/^\s*container_name:/d' docker-compose.yml
+fi
+
 # ----------------------------------------------------------------------------
 # sobe stack
 # ----------------------------------------------------------------------------
@@ -204,6 +212,7 @@ docker compose --project-name "$COMPOSE_PROJECT_NAME" up -d
 
 echo "  aguardando Postgres ficar healthy..."
 DB_CONTAINER="${COMPOSE_PROJECT_NAME}-db-1"
+
 for i in {1..60}; do
   if docker exec "$DB_CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
     echo "  postgres pronto"
