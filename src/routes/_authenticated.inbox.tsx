@@ -292,13 +292,14 @@ function InboxPage() {
   );
 }
 
-function ConversationItem({ conv, queue, agent, isMine, active, onClick }: {
+function ConversationItem({ conv, queue, agent, isMine, active, onClick, onHover }: {
   conv: Conversation;
   queue?: { name: string; color: string };
   agent?: { full_name: string | null; email: string | null };
   isMine: boolean;
   active: boolean;
   onClick: () => void;
+  onHover?: () => void;
 }) {
   const name = conv.contacts?.name || conv.contacts?.phone;
   const initials = (name ?? "?").slice(0, 2).toUpperCase();
@@ -306,6 +307,8 @@ function ConversationItem({ conv, queue, agent, isMine, active, onClick }: {
   return (
     <button
       onClick={onClick}
+      onMouseEnter={onHover}
+      onFocus={onHover}
       className={cn(
         "group flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all",
         active ? "bg-accent" : "hover:bg-muted",
