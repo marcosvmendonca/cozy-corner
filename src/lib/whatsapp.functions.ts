@@ -51,7 +51,7 @@ const SendInput = z.object({
   conversationId: z.string().uuid(),
   text: z.string().optional(),
   mediaUrl: z.string().url().optional(),
-  mediaType: z.enum(["image", "video", "document", "audio"]).optional(),
+  mediaType: z.enum(["image", "video", "document", "audio", "sticker"]).optional(),
   fileName: z.string().optional(),
 });
 
@@ -74,13 +74,17 @@ export const sendMessage = createServerFn({ method: "POST" })
     let externalId: string | null = null;
     let status = "pending";
     let errorMessage: string | null = null;
-    let type: "text" | "image" | "video" | "audio" | "document" = "text";
+    let type: "text" | "image" | "video" | "audio" | "document" | "sticker" = "text";
 
     if (cfg) {
       let result;
       if (data.mediaUrl && data.mediaType) {
         type = data.mediaType;
         if (data.mediaType === "audio") result = await evoSendAudio(cfg, phone, data.mediaUrl);
+        else if (data.mediaType === "sticker") {
+          const { evoSendSticker } = await import("./whatsapp.server");
+          result = await evoSendSticker(cfg, phone, data.mediaUrl);
+        }
         else result = await evoSendMedia(cfg, phone, data.mediaUrl, data.mediaType, data.text, data.fileName);
       } else if (data.text) {
         result = await evoSendText(cfg, phone, data.text);
@@ -248,7 +252,7 @@ export const forwardMessage = createServerFn({ method: "POST" })
           .single();
         if (!conv) throw new Error("Conversa alvo não encontrada");
         const phone = (conv as any).contacts.phone as string;
-        const { fetchEvoConfig, evoSendText, evoSendMedia, evoSendAudio } = await import("./whatsapp.server");
+        const { fetchEvoConfig, evoSendText, evoSendMedia, evoSendAudio, evoSendSticker } = await import("./whatsapp.server");
         const cfg = await fetchEvoConfig();
         let externalId: string | null = null;
         let status = "pending";
@@ -259,6 +263,7 @@ export const forwardMessage = createServerFn({ method: "POST" })
             result = await evoSendText(cfg, phone, msg.body);
           } else if (msg.media_url) {
             if (msg.type === "audio") result = await evoSendAudio(cfg, phone, msg.media_url);
+            else if (msg.type === "sticker") result = await evoSendSticker(cfg, phone, msg.media_url);
             else if (msg.type === "image" || msg.type === "video" || msg.type === "document") {
               result = await evoSendMedia(cfg, phone, msg.media_url, msg.type, msg.body ?? undefined);
             }

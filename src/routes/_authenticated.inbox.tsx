@@ -433,6 +433,7 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
   const fileImageRef = useRef<HTMLInputElement>(null);
   const fileVideoRef = useRef<HTMLInputElement>(null);
   const fileDocRef = useRef<HTMLInputElement>(null);
+  const fileStickerRef = useRef<HTMLInputElement>(null);
 
   const sendMut = useMutation({
     mutationFn: async (payload: { text?: string; mediaUrl?: string; mediaType?: any; fileName?: string }) => {
@@ -485,10 +486,10 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     catch (e: any) { toast.error("IA: " + e.message); }
     finally { setSuggesting(false); }
   }
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>, forceType?: "image" | "video" | "document") {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>, forceType?: "image" | "video" | "document" | "sticker") {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
-    const label = forceType ?? (file.type.startsWith("image/") ? "imagem" : file.type.startsWith("video/") ? "vídeo" : "documento");
+    const label = forceType === "sticker" ? "figurinha" : (forceType ?? (file.type.startsWith("image/") ? "imagem" : file.type.startsWith("video/") ? "vídeo" : "documento"));
     setUploading({ label: `Enviando ${label}...` });
     const reader = new FileReader();
     reader.onload = async () => {
@@ -587,6 +588,7 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
         <input ref={fileImageRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e, "image")} />
         <input ref={fileVideoRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFile(e, "video")} />
         <input ref={fileDocRef} type="file" className="hidden" onChange={(e) => handleFile(e, "document")} />
+        <input ref={fileStickerRef} type="file" accept="image/webp,image/png" className="hidden" onChange={(e) => handleFile(e, "sticker")} />
         <div className="flex items-end gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -603,6 +605,9 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => fileDocRef.current?.click()}>
                 <FileIcon className="mr-2 h-4 w-4" /> Documento
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileStickerRef.current?.click()}>
+                <Smile className="mr-2 h-4 w-4" /> Figurinha (.webp)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setContactOpen(true)}>
@@ -835,7 +840,9 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
       )}
       <div className={cn(
         "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-opacity duration-300",
-        out ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface",
+        m.type === "sticker" && !deleted && !editing
+          ? "!bg-transparent !shadow-none !p-0"
+          : out ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface",
         m.sent_by === "ai" && "ring-1 ring-brand/40",
         deleted && "italic opacity-40",
         busy && !deleted && "opacity-50",
@@ -872,6 +879,7 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           </div>
         ) : (
           <>
+            {m.type === "sticker" && m.media_url && <img src={m.media_url} alt="sticker" className="max-h-40 max-w-[160px]" />}
             {m.type === "image" && m.media_url && <img src={m.media_url} alt="" className="mb-1 max-h-64 rounded-lg" />}
             {m.type === "audio" && m.media_url && <audio src={m.media_url} controls className="mb-1 max-w-full" />}
             {m.type === "video" && m.media_url && <video src={m.media_url} controls className="mb-1 max-h-64 rounded-lg" />}

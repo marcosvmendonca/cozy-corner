@@ -454,7 +454,14 @@ export type Database = {
       conversation_status: "waiting" | "open" | "resolved"
       message_direction: "in" | "out"
       message_sender: "customer" | "agent" | "ai" | "flow" | "system"
-      message_type: "text" | "image" | "audio" | "video" | "document" | "system"
+      message_type:
+        | "text"
+        | "image"
+        | "audio"
+        | "video"
+        | "document"
+        | "system"
+        | "sticker"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -586,7 +593,15 @@ export const Constants = {
       conversation_status: ["waiting", "open", "resolved"],
       message_direction: ["in", "out"],
       message_sender: ["customer", "agent", "ai", "flow", "system"],
-      message_type: ["text", "image", "audio", "video", "document", "system"],
+      message_type: [
+        "text",
+        "image",
+        "audio",
+        "video",
+        "document",
+        "system",
+        "sticker",
+      ],
     },
   },
 } as const

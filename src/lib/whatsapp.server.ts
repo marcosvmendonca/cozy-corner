@@ -88,6 +88,24 @@ export async function evoSendAudio(cfg: EvoConfig, number: string, audioUrl: str
   });
 }
 
+export async function evoSendSticker(cfg: EvoConfig, number: string, stickerUrl: string) {
+  // Evolution accepts a URL or base64. Prefer downloading (private storage) and sending base64.
+  let payload = stickerUrl;
+  try {
+    const res = await fetch(stickerUrl);
+    if (res.ok) {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+      payload = btoa(bin);
+    }
+  } catch {}
+  return evoRequest(cfg, `/message/sendSticker/${cfg.instance}`, {
+    method: "POST",
+    body: { number, sticker: payload },
+  });
+}
+
 export async function evoSetWebhook(cfg: EvoConfig, url: string) {
   return evoRequest(cfg, `/webhook/set/${cfg.instance}`, {
     method: "POST",

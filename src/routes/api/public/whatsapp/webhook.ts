@@ -17,17 +17,20 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
         if (event === "messages.update" || event === "messages_update") {
           const items = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
           for (const raw of items) {
-            const key = raw?.key ?? raw?.keyId ?? {};
-            const externalId: string | null = key?.id ?? raw?.keyId ?? raw?.messageId ?? null;
+            const key = raw?.key ?? {};
+            const externalId: string | null =
+              key?.id ?? raw?.keyId ?? raw?.messageId ?? raw?.key_id ?? null;
             if (!externalId) continue;
-            const s = raw?.update?.status ?? raw?.status ?? null;
-            const statusStr = typeof s === "string" ? s.toLowerCase() : (
-              s === 2 || s === "SERVER_ACK" ? "sent" :
-              s === 3 || s === "DELIVERY_ACK" ? "delivered" :
-              s === 4 || s === "READ" ? "read" :
-              s === 5 || s === "PLAYED" ? "read" :
-              null
-            );
+            const s = raw?.update?.status ?? raw?.status ?? raw?.messageStatus ?? null;
+            const norm = typeof s === "string" ? s.toUpperCase() : s;
+            let statusStr: string | null = null;
+            if (norm === 2 || norm === "SERVER_ACK" || norm === "SENT") statusStr = "sent";
+            else if (norm === 3 || norm === "DELIVERY_ACK" || norm === "DELIVERED") statusStr = "delivered";
+            else if (norm === 4 || norm === "READ" || norm === "PLAYED" || norm === 5) statusStr = "read";
+            else if (typeof norm === "string") {
+              const l = norm.toLowerCase();
+              if (["sent", "delivered", "read"].includes(l)) statusStr = l;
+            }
             if (!statusStr) continue;
             await supabaseAdmin.from("messages").update({ status: statusStr }).eq("external_id", externalId);
           }
@@ -46,11 +49,12 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
             const msg = raw?.message ?? {};
             const pushName: string | undefined = raw?.pushName;
 
-            let type: "text" | "image" | "audio" | "video" | "document" = "text";
+            let type: "text" | "image" | "audio" | "video" | "document" | "sticker" = "text";
             let body: string | null = null;
             let mediaUrl: string | null = null;
             if (msg.conversation) { body = msg.conversation; }
             else if (msg.extendedTextMessage?.text) { body = msg.extendedTextMessage.text; }
+            else if (msg.stickerMessage) { type = "sticker"; mediaUrl = msg.stickerMessage.url ?? null; }
             else if (msg.imageMessage) { type = "image"; body = msg.imageMessage.caption ?? null; mediaUrl = msg.imageMessage.url ?? null; }
             else if (msg.audioMessage) { type = "audio"; mediaUrl = msg.audioMessage.url ?? null; }
             else if (msg.videoMessage) { type = "video"; body = msg.videoMessage.caption ?? null; mediaUrl = msg.videoMessage.url ?? null; }
