@@ -85,8 +85,28 @@ if [[ -n "$GH_URL" ]]; then
 fi
 
 API_URL_DEFAULT="http://localhost:${KONG_HTTP}"
-API_URL=$(ask "URL pública da API (pode editar depois no .env)" "$API_URL_DEFAULT")
+API_URL=$(ask "URL pública da API (ex: https://api-${PROJECT}.seudominio.com)" "$API_URL_DEFAULT")
 SITE_URL=$(ask "SITE_URL (frontend)" "http://localhost:3000")
+
+echo
+echo "Traefik/EasyPanel — o script pode gerar um docker-compose.override.yml"
+echo "com labels do Traefik pra publicar o Kong direto via HTTPS, sem precisar"
+echo "criar um App proxy no EasyPanel. Requer que a URL pública seja https://..."
+USE_TRAEFIK="n"
+TRAEFIK_NETWORK=""
+TRAEFIK_CERTRESOLVER=""
+TRAEFIK_ENTRYPOINT=""
+TRAEFIK_HOST=""
+if [[ "$API_URL" =~ ^https://([^/]+) ]]; then
+  TRAEFIK_HOST="${BASH_REMATCH[1]}"
+  if ask_yn "Publicar Kong via Traefik (labels no compose)?" "y"; then
+    USE_TRAEFIK="y"
+    TRAEFIK_NETWORK=$(ask   "Nome da rede Traefik do EasyPanel"   "easypanel-traefik")
+    TRAEFIK_ENTRYPOINT=$(ask "Entrypoint HTTPS do Traefik"         "websecure")
+    TRAEFIK_CERTRESOLVER=$(ask "Cert resolver (Let's Encrypt)"     "letsencrypt")
+  fi
+fi
+
 
 TARGET="/opt/supabase-${PROJECT}"
 if [[ -d "$TARGET" ]]; then
