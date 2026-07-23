@@ -384,6 +384,8 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     },
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
+    staleTime: 3000,
   });
 
   const [text, setText] = useState("");
