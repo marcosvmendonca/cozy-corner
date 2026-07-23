@@ -419,14 +419,48 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, conv.id]);
 
+  const [uploading, setUploading] = useState<null | { label: string }>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const fileImageRef = useRef<HTMLInputElement>(null);
+  const fileVideoRef = useRef<HTMLInputElement>(null);
+  const fileDocRef = useRef<HTMLInputElement>(null);
+
   const sendMut = useMutation({
     mutationFn: async (payload: { text?: string; mediaUrl?: string; mediaType?: any; fileName?: string }) => {
       return sendFn({ data: { conversationId: conv.id, ...payload } });
+    },
+    onMutate: async (payload) => {
+      await qc.cancelQueries({ queryKey: ["messages", conv.id] });
+      const prev = qc.getQueryData<Message[]>(["messages", conv.id]) ?? [];
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const type: any = payload.mediaType ?? "text";
+      const optimistic: Message = {
+        id: tempId,
+        conversation_id: conv.id,
+        direction: "out",
+        type,
+        body: payload.text ?? null,
+        media_url: payload.mediaUrl ?? null,
+        sent_by: "agent",
+        sender_user_id: me?.id ?? null,
+        external_id: null,
+        status: "pending",
+        error_message: null,
+        created_at: new Date().toISOString(),
+        deleted_at: null,
+        edited_at: null,
+      } as any;
+      qc.setQueryData<Message[]>(["messages", conv.id], [...prev, optimistic]);
+      return { tempId };
     },
     onSuccess: (res) => {
       if (!res.sent) toast.error("Falha ao enviar: " + (res.errorMessage ?? "erro"));
       qc.invalidateQueries({ queryKey: ["messages", conv.id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
+    onError: (e: any) => {
+      toast.error("Falha ao enviar: " + e.message);
+      qc.invalidateQueries({ queryKey: ["messages", conv.id] });
     },
   });
 
@@ -442,19 +476,30 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     catch (e: any) { toast.error("IA: " + e.message); }
     finally { setSuggesting(false); }
   }
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>, forceType?: "image" | "video" | "document") {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
+    const label = forceType ?? (file.type.startsWith("image/") ? "imagem" : file.type.startsWith("video/") ? "vídeo" : "documento");
+    setUploading({ label: `Enviando ${label}...` });
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       try {
         const up = await uploadFn({ data: { filename: file.name, contentType: file.type, dataUrl } });
-        const mediaType = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document";
+        const mediaType = forceType ?? (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document");
         sendMut.mutate({ mediaUrl: up.url, mediaType: mediaType as any, fileName: file.name });
       } catch (err: any) { toast.error("Upload: " + err.message); }
+      finally { setUploading(null); }
     };
     reader.readAsDataURL(file);
+  }
+  function insertEmoji(emoji: string) {
+    setText((t) => t + emoji);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }
+  function sendContactCard(name: string, phone: string) {
+    const body = `📇 ${name}\n📞 ${phone}`;
+    sendMut.mutate({ text: body });
   }
 
   async function handleSummarize() {
