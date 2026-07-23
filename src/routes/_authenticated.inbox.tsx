@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { z } from "zod";
+import EmojiPicker, { EmojiStyle, Theme as EmojiTheme } from "emoji-picker-react";
 import { supabase } from "@/integrations/supabase/client";
 import { sendMessage, uploadMedia, deleteMessage, editMessage, forwardMessage } from "@/lib/whatsapp.functions";
 import { suggestReply, summarizeConversation } from "@/lib/ai.functions";
@@ -20,16 +21,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
-  Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap,
+  Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap, Smile,
   MessageSquare, Loader2, User as UserIcon, PhoneCall, FileText,
   Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon, PanelRightClose, PanelRightOpen,
-  MoreVertical, Trash2, Pencil, Forward, Check, X,
+  MoreVertical, Trash2, Pencil, Forward, Check, X, Clock, AlertCircle,
+  Image as ImageIcon, Film, FileIcon, Contact as ContactIcon,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
+
+function MessageStatusIcon({ status }: { status: string | null }) {
+  if (!status || status === "pending") return <Clock className="h-3 w-3 opacity-70" />;
+  if (status === "failed") return <AlertCircle className="h-3 w-3 text-destructive" />;
+  if (status === "read") return <CheckCheck className="h-3 w-3 text-sky-400" />;
+  if (status === "delivered") return <CheckCheck className="h-3 w-3 opacity-80" />;
+  // sent / server ack / anything else
+  return <Check className="h-3 w-3 opacity-80" />;
+}
 
 type Conversation = Tables<"conversations"> & { contacts: Tables<"contacts"> };
 type Message = Tables<"messages">;
@@ -99,7 +111,20 @@ function InboxPage() {
     },
     refetchInterval: 8000,
     refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
   });
+
+  function prefetchMessages(convId: string) {
+    qc.prefetchQuery({
+      queryKey: ["messages", convId],
+      queryFn: async () => {
+        const { data } = await supabase
+          .from("messages").select("*").eq("conversation_id", convId).is("deleted_at", null).order("created_at").limit(500);
+        return (data ?? []) as Message[];
+      },
+      staleTime: 3000,
+    });
+  }
 
   useEffect(() => {
     const ch = supabase
@@ -238,6 +263,7 @@ function InboxPage() {
                   isMine={c.assigned_agent_id === me?.id}
                   active={c.id === selectedId}
                   onClick={() => navigate({ search: { c: c.id } })}
+                  onHover={() => prefetchMessages(c.id)}
                 />
               ))}
             </div>
@@ -275,13 +301,14 @@ function InboxPage() {
   );
 }
 
-function ConversationItem({ conv, queue, agent, isMine, active, onClick }: {
+function ConversationItem({ conv, queue, agent, isMine, active, onClick, onHover }: {
   conv: Conversation;
   queue?: { name: string; color: string };
   agent?: { full_name: string | null; email: string | null };
   isMine: boolean;
   active: boolean;
   onClick: () => void;
+  onHover?: () => void;
 }) {
   const name = conv.contacts?.name || conv.contacts?.phone;
   const initials = (name ?? "?").slice(0, 2).toUpperCase();
@@ -289,6 +316,8 @@ function ConversationItem({ conv, queue, agent, isMine, active, onClick }: {
   return (
     <button
       onClick={onClick}
+      onMouseEnter={onHover}
+      onFocus={onHover}
       className={cn(
         "group flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-all",
         active ? "bg-accent" : "hover:bg-muted",
@@ -364,6 +393,8 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     },
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
+    staleTime: 3000,
   });
 
   const [text, setText] = useState("");
@@ -397,14 +428,48 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, conv.id]);
 
+  const [uploading, setUploading] = useState<null | { label: string }>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const fileImageRef = useRef<HTMLInputElement>(null);
+  const fileVideoRef = useRef<HTMLInputElement>(null);
+  const fileDocRef = useRef<HTMLInputElement>(null);
+
   const sendMut = useMutation({
     mutationFn: async (payload: { text?: string; mediaUrl?: string; mediaType?: any; fileName?: string }) => {
       return sendFn({ data: { conversationId: conv.id, ...payload } });
+    },
+    onMutate: async (payload) => {
+      await qc.cancelQueries({ queryKey: ["messages", conv.id] });
+      const prev = qc.getQueryData<Message[]>(["messages", conv.id]) ?? [];
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const type: any = payload.mediaType ?? "text";
+      const optimistic: Message = {
+        id: tempId,
+        conversation_id: conv.id,
+        direction: "out",
+        type,
+        body: payload.text ?? null,
+        media_url: payload.mediaUrl ?? null,
+        sent_by: "agent",
+        sender_user_id: me?.id ?? null,
+        external_id: null,
+        status: "pending",
+        error_message: null,
+        created_at: new Date().toISOString(),
+        deleted_at: null,
+        edited_at: null,
+      } as any;
+      qc.setQueryData<Message[]>(["messages", conv.id], [...prev, optimistic]);
+      return { tempId };
     },
     onSuccess: (res) => {
       if (!res.sent) toast.error("Falha ao enviar: " + (res.errorMessage ?? "erro"));
       qc.invalidateQueries({ queryKey: ["messages", conv.id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
+    onError: (e: any) => {
+      toast.error("Falha ao enviar: " + e.message);
+      qc.invalidateQueries({ queryKey: ["messages", conv.id] });
     },
   });
 
@@ -420,19 +485,30 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     catch (e: any) { toast.error("IA: " + e.message); }
     finally { setSuggesting(false); }
   }
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>, forceType?: "image" | "video" | "document") {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
+    const label = forceType ?? (file.type.startsWith("image/") ? "imagem" : file.type.startsWith("video/") ? "vídeo" : "documento");
+    setUploading({ label: `Enviando ${label}...` });
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       try {
         const up = await uploadFn({ data: { filename: file.name, contentType: file.type, dataUrl } });
-        const mediaType = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document";
+        const mediaType = forceType ?? (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document");
         sendMut.mutate({ mediaUrl: up.url, mediaType: mediaType as any, fileName: file.name });
       } catch (err: any) { toast.error("Upload: " + err.message); }
+      finally { setUploading(null); }
     };
     reader.readAsDataURL(file);
+  }
+  function insertEmoji(emoji: string) {
+    setText((t) => t + emoji);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }
+  function sendContactCard(name: string, phone: string) {
+    const body = `📇 ${name}\n📞 ${phone}`;
+    sendMut.mutate({ text: body });
   }
 
   async function handleSummarize() {
@@ -503,16 +579,67 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
             Somente o responsável ou membros da fila podem responder.
           </div>
         )}
+        {uploading && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg border bg-brand-soft/50 px-3 py-1.5 text-xs text-brand">
+            <Loader2 className="h-3 w-3 animate-spin" /> {uploading.label}
+          </div>
+        )}
+        <input ref={fileImageRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e, "image")} />
+        <input ref={fileVideoRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFile(e, "video")} />
+        <input ref={fileDocRef} type="file" className="hidden" onChange={(e) => handleFile(e, "document")} />
         <div className="flex items-end gap-2">
-          <label className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl text-muted-foreground hover:bg-muted">
-            <Paperclip className="h-4 w-4" />
-            <input type="file" className="hidden" onChange={handleFile} />
-          </label>
-          <AudioRecorder onRecorded={(dataUrl, mime) => {
-            uploadFn({ data: { filename: `audio-${Date.now()}.webm`, contentType: mime, dataUrl } })
-              .then((up) => sendMut.mutate({ mediaUrl: up.url, mediaType: "audio" }))
-              .catch((e) => toast.error("Áudio: " + e.message));
-          }} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground" title="Anexar">
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top">
+              <DropdownMenuItem onClick={() => fileImageRef.current?.click()}>
+                <ImageIcon className="mr-2 h-4 w-4" /> Imagem
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileVideoRef.current?.click()}>
+                <Film className="mr-2 h-4 w-4" /> Vídeo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileDocRef.current?.click()}>
+                <FileIcon className="mr-2 h-4 w-4" /> Documento
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setContactOpen(true)}>
+                <ContactIcon className="mr-2 h-4 w-4" /> Contato
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground" title="Emojis">
+                <Smile className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="start" className="w-auto border-0 bg-transparent p-0 shadow-none">
+              <EmojiPicker
+                onEmojiClick={(d) => insertEmoji(d.emoji)}
+                emojiStyle={EmojiStyle.APPLE}
+                theme={EmojiTheme.AUTO}
+                lazyLoadEmojis
+                width={340}
+                height={380}
+                previewConfig={{ showPreview: false }}
+                searchPlaceHolder="Buscar emoji..."
+              />
+            </PopoverContent>
+          </Popover>
+          <AudioRecorder
+            disabled={waiting}
+            onRecorded={(dataUrl, mime) => {
+              setUploading({ label: "Enviando áudio..." });
+              uploadFn({ data: { filename: `audio-${Date.now()}.webm`, contentType: mime, dataUrl } })
+                .then((up) => sendMut.mutate({ mediaUrl: up.url, mediaType: "audio" }))
+                .catch((e) => toast.error("Áudio: " + e.message))
+                .finally(() => setUploading(null));
+            }}
+          />
+          <ContactCardDialog open={contactOpen} onOpenChange={setContactOpen} onSend={sendContactCard} />
           <div className="relative flex-1">
             {slashOpen && slashResults.length > 0 && (
               <div className="absolute bottom-full left-0 right-0 z-20 mb-2 max-h-60 overflow-auto rounded-xl border bg-popover shadow-lg">
@@ -757,10 +884,10 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           </>
         )}
         {!deleted && !editing && (
-          <div className={cn("mt-1 text-[10px] opacity-60", out ? "text-right" : "")}>
-            {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            {edited && " · editada"}
-            {out && m.status && ` · ${m.status === "sent" ? "✓" : m.status === "failed" ? "!" : "…"}`}
+          <div className={cn("mt-1 flex items-center gap-1 text-[10px] opacity-70", out ? "justify-end" : "")}>
+            <span>{new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+            {edited && <span>· editada</span>}
+            {out && <MessageStatusIcon status={m.status} />}
           </div>
         )}
       </div>
@@ -928,32 +1055,108 @@ function ForwardDialog({ messageId, currentConversationId, open, onOpenChange }:
   );
 }
 
-function AudioRecorder({ onRecorded }: { onRecorded: (dataUrl: string, mime: string) => void }) {
+function AudioRecorder({ onRecorded, disabled }: { onRecorded: (dataUrl: string, mime: string) => void; disabled?: boolean }) {
   const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<BlobPart[]>([]);
+  const cancelledRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+
   async function start() {
     try {
+      cancelledRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
       const mr = new MediaRecorder(stream, { mimeType: mime });
       chunks.current = [];
       mr.ondataavailable = (e) => chunks.current.push(e.data);
       mr.onstop = () => {
-        const blob = new Blob(chunks.current, { type: mime });
         stream.getTracks().forEach((t) => t.stop());
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (cancelledRef.current) { setSeconds(0); return; }
+        const blob = new Blob(chunks.current, { type: mime });
         const reader = new FileReader();
         reader.onload = () => onRecorded(reader.result as string, mime);
         reader.readAsDataURL(blob);
+        setSeconds(0);
       };
-      mr.start(); recRef.current = mr; setRecording(true);
+      mr.start();
+      recRef.current = mr;
+      setRecording(true);
+      setSeconds(0);
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch (e: any) { toast.error("Microfone: " + e.message); }
   }
   function stop() { recRef.current?.stop(); setRecording(false); }
+  function cancel() { cancelledRef.current = true; recRef.current?.stop(); setRecording(false); }
+
+  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  if (!recording) {
+    return (
+      <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground" onClick={start} disabled={disabled} title="Gravar áudio">
+        <Mic className="h-4 w-4" />
+      </Button>
+    );
+  }
   return (
-    <Button type="button" variant={recording ? "destructive" : "outline"} size="icon" onClick={recording ? stop : start} title={recording ? "Parar" : "Gravar"}>
-      {recording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-    </Button>
+    <div className="flex items-center gap-1 rounded-xl border border-destructive/50 bg-destructive/10 px-2 py-1">
+      <motion.span
+        className="h-2 w-2 rounded-full bg-destructive"
+        animate={{ opacity: [1, 0.3, 1], scale: [1, 1.15, 1] }}
+        transition={{ duration: 1.1, repeat: Infinity }}
+      />
+      <span className="min-w-[40px] font-mono text-xs tabular-nums text-destructive">{fmt(seconds)}</span>
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/20" onClick={cancel} title="Cancelar">
+        <X className="h-4 w-4" />
+      </Button>
+      <Button type="button" size="icon" className="h-8 w-8 bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={stop} title="Enviar áudio">
+        <Send className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function ContactCardDialog({ open, onOpenChange, onSend }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSend: (name: string, phone: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !phone.trim()) return;
+    onSend(name.trim(), phone.trim());
+    setName(""); setPhone("");
+    onOpenChange(false);
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Enviar contato</DialogTitle>
+          <DialogDescription>Compartilhe nome e telefone.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">Nome</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">Telefone</label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+55 11 99999-8888" required />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button type="submit">Enviar</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

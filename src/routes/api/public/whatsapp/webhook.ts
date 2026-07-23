@@ -12,13 +12,33 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
 
         const event = (payload?.event ?? "").toString().toLowerCase();
 
+        // Read receipts / delivery / send acks from Evolution
+        // status codes: 0/1 pending, 2 sent (server ack), 3 delivered, 4 read, 5 played
+        if (event === "messages.update" || event === "messages_update") {
+          const items = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
+          for (const raw of items) {
+            const key = raw?.key ?? raw?.keyId ?? {};
+            const externalId: string | null = key?.id ?? raw?.keyId ?? raw?.messageId ?? null;
+            if (!externalId) continue;
+            const s = raw?.update?.status ?? raw?.status ?? null;
+            const statusStr = typeof s === "string" ? s.toLowerCase() : (
+              s === 2 || s === "SERVER_ACK" ? "sent" :
+              s === 3 || s === "DELIVERY_ACK" ? "delivered" :
+              s === 4 || s === "READ" ? "read" :
+              s === 5 || s === "PLAYED" ? "read" :
+              null
+            );
+            if (!statusStr) continue;
+            await supabaseAdmin.from("messages").update({ status: statusStr }).eq("external_id", externalId);
+          }
+          return jsonOk();
+        }
 
         if (event === "messages.upsert" || event === "messages_upsert") {
           const items = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
           for (const raw of items) {
             const key = raw?.key ?? {};
             const isFromMe = !!key.fromMe;
-            if (isFromMe) continue; // ignore echo for now
             const remoteJid: string = key.remoteJid ?? "";
             const phone = remoteJid.replace(/@.*/, "").replace(/\D/g, "");
             if (!phone || remoteJid.includes("@g.us")) continue; // skip groups
@@ -36,6 +56,13 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
             else if (msg.videoMessage) { type = "video"; body = msg.videoMessage.caption ?? null; mediaUrl = msg.videoMessage.url ?? null; }
             else if (msg.documentMessage) { type = "document"; body = msg.documentMessage.fileName ?? null; mediaUrl = msg.documentMessage.url ?? null; }
 
+            // Deduplicate: if we already have this external_id, skip (echo of our own send).
+            if (key?.id) {
+              const { data: existing } = await supabaseAdmin
+                .from("messages").select("id").eq("external_id", key.id).maybeSingle();
+              if (existing) continue;
+            }
+
             // Upsert contact
             let { data: contact } = await supabaseAdmin.from("contacts").select("id, name").eq("phone", phone).maybeSingle();
             if (!contact) {
@@ -51,7 +78,7 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
             if (!conv) {
               const ins = await supabaseAdmin.from("conversations").insert({
                 contact_id: contact!.id,
-                status: "waiting",
+                status: isFromMe ? "open" : "waiting",
                 last_message_preview: body ?? `[${type}]`,
                 last_message_at: new Date().toISOString(),
               }).select("id, ai_enabled").single();
@@ -60,13 +87,13 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
 
             await supabaseAdmin.from("messages").insert({
               conversation_id: conv!.id,
-              direction: "in",
+              direction: isFromMe ? "out" : "in",
               type,
               body,
               media_url: mediaUrl,
-              sent_by: "customer",
+              sent_by: isFromMe ? "agent" : "customer",
               external_id: key.id ?? null,
-              status: "received",
+              status: isFromMe ? "sent" : "received",
             });
 
             await supabaseAdmin.from("conversations").update({
@@ -76,11 +103,15 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
           }
         }
 
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200, headers: { "Content-Type": "application/json" },
-        });
+        return jsonOk();
       },
       GET: async () => new Response("ok"),
     },
   },
 });
+
+function jsonOk() {
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200, headers: { "Content-Type": "application/json" },
+  });
+}
