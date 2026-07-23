@@ -41,8 +41,12 @@ Ou clone o repo e rode direto: `sudo bash scripts/install-supabase.sh`.
 | **URL do repositório GitHub** | Repo com migrations. Deixe em branco pra pular. Aceita `https://…git` ou `git@github.com:…`. | `https://github.com/user/crm.git` |
 | **Branch** | Branch do repo. | `main` |
 | **Subpasta com .sql** | Onde ficam as migrations dentro do repo. | `supabase/migrations` |
-| **URL pública da API** | O que vai virar `API_EXTERNAL_URL` / `SUPABASE_PUBLIC_URL`. Se ainda não tem domínio, deixa localhost e edita depois. | `https://api-crm2.seudominio.com` |
+| **URL pública da API** | Vira `API_EXTERNAL_URL` / `SUPABASE_PUBLIC_URL`. Use `https://...` para ativar a integração automática com Traefik. | `https://api-crm2.seudominio.com` |
 | **SITE_URL** | URL do frontend (usada em redirects do Auth). | `https://crm2.seudominio.com` |
+| **Publicar Kong via Traefik?** | Se sim, o script gera `docker-compose.override.yml` com labels do Traefik e conecta o Kong à rede do EasyPanel — não precisa criar App proxy no EasyPanel. | `y` |
+| **Rede Traefik do EasyPanel** | Nome da rede docker externa onde o Traefik do EasyPanel escuta. Confira com `docker network ls`. | `easypanel-traefik` |
+| **Entrypoint HTTPS** | Nome do entrypoint HTTPS no Traefik. | `websecure` |
+| **Cert resolver** | Nome do resolver Let's Encrypt configurado no Traefik do EasyPanel. | `letsencrypt` |
 
 ---
 
@@ -94,21 +98,36 @@ O script também remove `container_name:` fixos do `docker-compose.yml` (ex: `su
 
 ## Após a instalação
 
-### 1. Expor Kong via EasyPanel (HTTPS)
+### 1. Publicar o Kong via Traefik
 
-Sem esse passo o Supabase só responde em `http://IP:<KONG_HTTP>`.
+O wizard já faz isso automaticamente quando você responde `y` em **"Publicar Kong via Traefik?"** e informa a rede do Traefik do EasyPanel. Ele gera um `docker-compose.override.yml` na pasta do projeto com:
 
-1. EasyPanel → seu Project → **+ Service → App**.
-2. Nome: `supabase-<slug>-proxy` (só um placeholder).
-3. **Domain** → adicione `api-<slug>.seudominio.com` → **HTTPS** + **Let's Encrypt**.
-4. **Proxy port** = a porta que você escolheu em `KONG_HTTP` (ex: `8100`).
-5. Salvar. Em ~1min o Traefik emite o cert e o subdomínio responde.
+- labels `traefik.http.routers.*` roteando o host informado para o serviço `kong` na porta interna `8000`;
+- entrypoint HTTPS (`websecure` por padrão) + cert resolver Let's Encrypt (`letsencrypt` por padrão);
+- rede externa `${TRAEFIK_NETWORK}` anexada ao container do Kong.
 
-Teste:
+**Não precisa criar um App/proxy no EasyPanel** — o Traefik do EasyPanel descobre o container pelas labels e emite o cert automaticamente no primeiro acesso HTTPS.
+
+Antes de rodar o wizard, confira o nome da rede do Traefik:
+
+```bash
+docker network ls | grep -i traefik
+# geralmente: easypanel-traefik
+```
+
+E garanta que o DNS `A` do subdomínio já aponta pra VPS — sem isso o Let's Encrypt falha.
+
+Teste depois de subir:
 ```bash
 curl -i https://api-<slug>.seudominio.com/rest/v1/
 # esperado: HTTP/2 401 (sem apikey — significa que o Kong está atendendo)
 ```
+
+**Se preferir publicar manualmente** (respondeu `n` no wizard, ou não usa EasyPanel):
+1. EasyPanel → Project → **+ Service → App** com **Proxy port** = `KONG_HTTP` do wizard (ex: `8100`), **Domain** com HTTPS + Let's Encrypt.
+2. Ou configure seu próprio reverse proxy apontando para `http://<host>:<KONG_HTTP>`.
+
+**Editar/adicionar Traefik depois:** basta criar/editar `docker-compose.override.yml` no diretório do projeto seguindo o mesmo formato e rodar `docker compose --project-name supabase_<slug> up -d`.
 
 ### 2. Atualizar `.env` com o domínio público
 
@@ -206,7 +225,9 @@ docker exec -it supabase_<slug>-db-1 psql -U postgres
 
 **`container name "/supabase-xxx" is already in use`** — o compose oficial tem `container_name:` fixo. O wizard remove automaticamente; se você editou o compose depois, rode: `sed -i '/^\s*container_name:/d' /opt/supabase-<slug>/docker-compose.yml`.
 
-**Studio não abre / erro 502 no domínio** — confira se o EasyPanel App está apontando pra porta correta (`KONG_HTTP`) e se o container do Kong está `healthy` (`docker compose … ps`).
+**Studio não abre / erro 502 no domínio** — confira se o container do Kong está `healthy` (`docker compose … ps`) e, se estiver usando Traefik via override, se o Kong está na rede correta (`docker inspect supabase_<slug>-kong-1 | grep -A2 Networks`). O nome tem que bater com `TRAEFIK_NETWORK`.
+
+**Traefik não emite cert / `404 page not found`** — normalmente é rede errada ou DNS não propagou. Cheque: `docker network ls | grep traefik` (nome exato), DNS A do subdomínio → IP da VPS (`dig +short api-<slug>.seudominio.com`), e logs do Traefik do EasyPanel. Se mudar o nome da rede, edite `docker-compose.override.yml` e rode `docker compose --project-name supabase_<slug> up -d`.
 
 **Signup falha com "Database error saving new user"** — falta migration do `handle_new_user` trigger. Aplique as migrations do repo (passo acima).
 

@@ -85,8 +85,28 @@ if [[ -n "$GH_URL" ]]; then
 fi
 
 API_URL_DEFAULT="http://localhost:${KONG_HTTP}"
-API_URL=$(ask "URL pública da API (pode editar depois no .env)" "$API_URL_DEFAULT")
+API_URL=$(ask "URL pública da API (ex: https://api-${PROJECT}.seudominio.com)" "$API_URL_DEFAULT")
 SITE_URL=$(ask "SITE_URL (frontend)" "http://localhost:3000")
+
+echo
+echo "Traefik/EasyPanel — o script pode gerar um docker-compose.override.yml"
+echo "com labels do Traefik pra publicar o Kong direto via HTTPS, sem precisar"
+echo "criar um App proxy no EasyPanel. Requer que a URL pública seja https://..."
+USE_TRAEFIK="n"
+TRAEFIK_NETWORK=""
+TRAEFIK_CERTRESOLVER=""
+TRAEFIK_ENTRYPOINT=""
+TRAEFIK_HOST=""
+if [[ "$API_URL" =~ ^https://([^/]+) ]]; then
+  TRAEFIK_HOST="${BASH_REMATCH[1]}"
+  if ask_yn "Publicar Kong via Traefik (labels no compose)?" "y"; then
+    USE_TRAEFIK="y"
+    TRAEFIK_NETWORK=$(ask   "Nome da rede Traefik do EasyPanel"   "easypanel-traefik")
+    TRAEFIK_ENTRYPOINT=$(ask "Entrypoint HTTPS do Traefik"         "websecure")
+    TRAEFIK_CERTRESOLVER=$(ask "Cert resolver (Let's Encrypt)"     "letsencrypt")
+  fi
+fi
+
 
 TARGET="/opt/supabase-${PROJECT}"
 if [[ -d "$TARGET" ]]; then
@@ -102,6 +122,11 @@ echo "  kong http:   $KONG_HTTP"
 echo "  kong https:  $KONG_HTTPS"
 echo "  api url:     $API_URL"
 echo "  site url:    $SITE_URL"
+if [[ "$USE_TRAEFIK" == "y" ]]; then
+  echo "  traefik:     host=$TRAEFIK_HOST rede=$TRAEFIK_NETWORK entry=$TRAEFIK_ENTRYPOINT resolver=$TRAEFIK_CERTRESOLVER"
+else
+  echo "  traefik:     (desabilitado — publique o Kong manualmente)"
+fi
 if [[ -n "$GH_URL" ]]; then
   echo "  github:      $GH_URL ($GH_BRANCH) — migrations em $GH_SUBDIR"
 else
@@ -212,6 +237,39 @@ if grep -q '^\s*container_name:' docker-compose.yml; then
 fi
 
 # ----------------------------------------------------------------------------
+# docker-compose.override.yml (Traefik/EasyPanel)
+# ----------------------------------------------------------------------------
+if [[ "$USE_TRAEFIK" == "y" ]]; then
+  section "[5b/7] Gerando docker-compose.override.yml com labels do Traefik"
+  if ! docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1; then
+    echo "  aviso: rede docker '$TRAEFIK_NETWORK' não existe. Confira o nome no EasyPanel"
+    echo "         (docker network ls). Vou gerar o override mesmo assim; ajuste depois se precisar."
+  fi
+  ROUTER="supabase_${PROJECT}"
+  cat > docker-compose.override.yml <<YAML
+services:
+  kong:
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK}"
+      - "traefik.http.routers.${ROUTER}.rule=Host(\`${TRAEFIK_HOST}\`)"
+      - "traefik.http.routers.${ROUTER}.entrypoints=${TRAEFIK_ENTRYPOINT}"
+      - "traefik.http.routers.${ROUTER}.tls=true"
+      - "traefik.http.routers.${ROUTER}.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
+      - "traefik.http.services.${ROUTER}.loadbalancer.server.port=8000"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK}
+YAML
+  echo "  override escrito. Kong será publicado em https://${TRAEFIK_HOST}"
+fi
+
+# ----------------------------------------------------------------------------
 # sobe stack
 # ----------------------------------------------------------------------------
 section "[6/7] Subindo stack (pode levar ~2min)"
@@ -288,8 +346,8 @@ Diretório:          ${TARGET}
 Compose project:    ${COMPOSE_PROJECT_NAME}
 
 Próximos passos:
-  1. Apontar subdomínio (ex: api-${PROJECT}.seudominio.com) pra porta ${KONG_HTTP}
-     via Traefik/EasyPanel com HTTPS.
+  1. DNS: aponte ${TRAEFIK_HOST:-<seu-subdominio>} → IP da VPS (A record).
+     $( [[ "$USE_TRAEFIK" == "y" ]] && echo "Traefik já foi configurado via override; o cert é emitido no primeiro acesso." || echo "Publique o Kong (porta ${KONG_HTTP}) via EasyPanel/Traefik com HTTPS." )
   2. Se mudar o domínio público, edite API_EXTERNAL_URL / SUPABASE_PUBLIC_URL /
      SITE_URL em ${TARGET}/.env e rode:
        docker compose --project-name ${COMPOSE_PROJECT_NAME} up -d
