@@ -51,7 +51,7 @@ const SendInput = z.object({
   conversationId: z.string().uuid(),
   text: z.string().optional(),
   mediaUrl: z.string().url().optional(),
-  mediaType: z.enum(["image", "video", "document", "audio"]).optional(),
+  mediaType: z.enum(["image", "video", "document", "audio", "sticker"]).optional(),
   fileName: z.string().optional(),
 });
 
