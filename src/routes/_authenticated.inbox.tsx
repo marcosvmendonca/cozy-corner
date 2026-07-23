@@ -254,6 +254,7 @@ function InboxPage() {
                   isMine={c.assigned_agent_id === me?.id}
                   active={c.id === selectedId}
                   onClick={() => navigate({ search: { c: c.id } })}
+                  onHover={() => prefetchMessages(c.id)}
                 />
               ))}
             </div>
