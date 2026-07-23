@@ -835,7 +835,9 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
       )}
       <div className={cn(
         "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-opacity duration-300",
-        out ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface",
+        m.type === "sticker" && !deleted && !editing
+          ? "!bg-transparent !shadow-none !p-0"
+          : out ? "rounded-br-md bg-brand text-brand-foreground" : "rounded-bl-md bg-surface",
         m.sent_by === "ai" && "ring-1 ring-brand/40",
         deleted && "italic opacity-40",
         busy && !deleted && "opacity-50",
