@@ -43,6 +43,64 @@ function MessageStatusIcon({ status }: { status: string | null }) {
   return <Check className="h-3 w-3 opacity-80" />;
 }
 
+function DocumentAttachment({ url, name, pending }: { url: string; name: string; pending?: boolean }) {
+  const isPdf = /\.pdf($|\?)/i.test(url) || /\.pdf$/i.test(name);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  async function forceDownload(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation();
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl; a.download = name || "arquivo";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
+  return (
+    <>
+      <div className="mb-1 flex items-center gap-2 rounded-lg bg-black/10 p-2 text-xs">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-black/10">
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-medium">{name}</div>
+          <div className="text-[10px] opacity-70">{isPdf ? "PDF" : "Documento"}{pending ? " · enviando..." : ""}</div>
+        </div>
+        {!pending && (
+          <div className="flex items-center gap-0.5">
+            {isPdf && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true); }} className="rounded p-1 hover:bg-black/10" title="Visualizar">
+                <FileText className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button type="button" onClick={forceDownload} className="rounded p-1 hover:bg-black/10" title="Baixar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+          </div>
+        )}
+      </div>
+      {isPdf && (
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-5xl h-[85vh] p-0 flex flex-col">
+            <DialogHeader className="px-4 py-2 border-b">
+              <DialogTitle className="text-sm truncate">{name}</DialogTitle>
+            </DialogHeader>
+            <iframe src={url} className="flex-1 w-full" title={name} />
+            <DialogFooter className="px-4 py-2 border-t">
+              <Button variant="outline" size="sm" onClick={forceDownload}>Baixar</Button>
+              <Button variant="ghost" size="sm" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>Abrir em nova aba</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 type Conversation = Tables<"conversations"> & { contacts: Tables<"contacts"> };
 type Message = Tables<"messages">;
 
