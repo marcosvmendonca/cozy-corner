@@ -91,7 +91,7 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
               type,
               body,
               media_url: mediaUrl,
-              sent_by: isFromMe ? "device" : "customer",
+              sent_by: isFromMe ? "agent" : "customer",
               external_id: key.id ?? null,
               status: isFromMe ? "sent" : "received",
             });
