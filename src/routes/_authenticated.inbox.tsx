@@ -433,6 +433,7 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
   const fileImageRef = useRef<HTMLInputElement>(null);
   const fileVideoRef = useRef<HTMLInputElement>(null);
   const fileDocRef = useRef<HTMLInputElement>(null);
+  const fileStickerRef = useRef<HTMLInputElement>(null);
 
   const sendMut = useMutation({
     mutationFn: async (payload: { text?: string; mediaUrl?: string; mediaType?: any; fileName?: string }) => {
