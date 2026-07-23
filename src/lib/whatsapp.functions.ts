@@ -74,13 +74,17 @@ export const sendMessage = createServerFn({ method: "POST" })
     let externalId: string | null = null;
     let status = "pending";
     let errorMessage: string | null = null;
-    let type: "text" | "image" | "video" | "audio" | "document" = "text";
+    let type: "text" | "image" | "video" | "audio" | "document" | "sticker" = "text";
 
     if (cfg) {
       let result;
       if (data.mediaUrl && data.mediaType) {
         type = data.mediaType;
         if (data.mediaType === "audio") result = await evoSendAudio(cfg, phone, data.mediaUrl);
+        else if (data.mediaType === "sticker") {
+          const { evoSendSticker } = await import("./whatsapp.server");
+          result = await evoSendSticker(cfg, phone, data.mediaUrl);
+        }
         else result = await evoSendMedia(cfg, phone, data.mediaUrl, data.mediaType, data.text, data.fileName);
       } else if (data.text) {
         result = await evoSendText(cfg, phone, data.text);
