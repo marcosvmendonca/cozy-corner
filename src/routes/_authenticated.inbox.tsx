@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { z } from "zod";
+import EmojiPicker, { EmojiStyle, Theme as EmojiTheme } from "emoji-picker-react";
 import { supabase } from "@/integrations/supabase/client";
 import { sendMessage, uploadMedia, deleteMessage, editMessage, forwardMessage } from "@/lib/whatsapp.functions";
 import { suggestReply, summarizeConversation } from "@/lib/ai.functions";
@@ -20,12 +21,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import {
-  Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap,
+  Search, Send, Sparkles, Plus, Mic, Square, Paperclip, Zap, Smile,
   MessageSquare, Loader2, User as UserIcon, PhoneCall, FileText,
   Inbox as InboxIcon, Users as UsersIcon, CheckCheck, ArrowRightLeft, HandshakeIcon, PanelRightClose, PanelRightOpen,
-  MoreVertical, Trash2, Pencil, Forward, Check, X,
+  MoreVertical, Trash2, Pencil, Forward, Check, X, Clock, AlertCircle,
+  Image as ImageIcon, Film, FileIcon, Contact as ContactIcon,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
