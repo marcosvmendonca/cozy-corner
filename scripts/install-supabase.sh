@@ -102,7 +102,7 @@ if [[ "$API_URL" =~ ^https://([^/]+) ]]; then
   if ask_yn "Publicar Kong via Traefik (labels no compose)?" "y"; then
     USE_TRAEFIK="y"
     TRAEFIK_NETWORK=$(ask   "Nome da rede Traefik do EasyPanel"   "easypanel-traefik")
-    TRAEFIK_ENTRYPOINT=$(ask "Entrypoint HTTPS do Traefik"         "websecure")
+    TRAEFIK_ENTRYPOINT=$(ask "Entrypoint HTTPS do Traefik (EasyPanel usa 'https')" "https")
     TRAEFIK_CERTRESOLVER=$(ask "Cert resolver (Let's Encrypt)"     "letsencrypt")
   fi
 fi
