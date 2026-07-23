@@ -606,6 +606,9 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
               <DropdownMenuItem onClick={() => fileDocRef.current?.click()}>
                 <FileIcon className="mr-2 h-4 w-4" /> Documento
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileStickerRef.current?.click()}>
+                <Smile className="mr-2 h-4 w-4" /> Figurinha (.webp)
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setContactOpen(true)}>
                 <ContactIcon className="mr-2 h-4 w-4" /> Contato
