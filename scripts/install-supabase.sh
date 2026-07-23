@@ -66,6 +66,9 @@ fi
 
 KONG_HTTP=$(ask  "Porta HTTP do Kong"  "8100")
 KONG_HTTPS=$(ask "Porta HTTPS do Kong" "8543")
+POSTGRES_PORT_HOST=$(ask "Porta do Postgres no host (supavisor session)"     "5532")
+POOLER_PORT_HOST=$(ask   "Porta do pooler no host (supavisor transaction)"   "6643")
+ANALYTICS_PORT_HOST=$(ask "Porta do analytics/logflare no host"              "4100")
 
 echo
 echo "Se você tem um repo GitHub com migrations em supabase/migrations,"
