@@ -588,6 +588,7 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
         <input ref={fileImageRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e, "image")} />
         <input ref={fileVideoRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFile(e, "video")} />
         <input ref={fileDocRef} type="file" className="hidden" onChange={(e) => handleFile(e, "document")} />
+        <input ref={fileStickerRef} type="file" accept="image/webp,image/png" className="hidden" onChange={(e) => handleFile(e, "sticker")} />
         <div className="flex items-end gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
