@@ -570,16 +570,67 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
             Somente o responsável ou membros da fila podem responder.
           </div>
         )}
+        {uploading && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg border bg-brand-soft/50 px-3 py-1.5 text-xs text-brand">
+            <Loader2 className="h-3 w-3 animate-spin" /> {uploading.label}
+          </div>
+        )}
+        <input ref={fileImageRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e, "image")} />
+        <input ref={fileVideoRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFile(e, "video")} />
+        <input ref={fileDocRef} type="file" className="hidden" onChange={(e) => handleFile(e, "document")} />
         <div className="flex items-end gap-2">
-          <label className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl text-muted-foreground hover:bg-muted">
-            <Paperclip className="h-4 w-4" />
-            <input type="file" className="hidden" onChange={handleFile} />
-          </label>
-          <AudioRecorder onRecorded={(dataUrl, mime) => {
-            uploadFn({ data: { filename: `audio-${Date.now()}.webm`, contentType: mime, dataUrl } })
-              .then((up) => sendMut.mutate({ mediaUrl: up.url, mediaType: "audio" }))
-              .catch((e) => toast.error("Áudio: " + e.message));
-          }} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground" title="Anexar">
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top">
+              <DropdownMenuItem onClick={() => fileImageRef.current?.click()}>
+                <ImageIcon className="mr-2 h-4 w-4" /> Imagem
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileVideoRef.current?.click()}>
+                <Film className="mr-2 h-4 w-4" /> Vídeo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => fileDocRef.current?.click()}>
+                <FileIcon className="mr-2 h-4 w-4" /> Documento
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setContactOpen(true)}>
+                <ContactIcon className="mr-2 h-4 w-4" /> Contato
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl text-muted-foreground" title="Emojis">
+                <Smile className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="start" className="w-auto border-0 bg-transparent p-0 shadow-none">
+              <EmojiPicker
+                onEmojiClick={(d) => insertEmoji(d.emoji)}
+                emojiStyle={EmojiStyle.APPLE}
+                theme={EmojiTheme.AUTO}
+                lazyLoadEmojis
+                width={340}
+                height={380}
+                previewConfig={{ showPreview: false }}
+                searchPlaceHolder="Buscar emoji..."
+              />
+            </PopoverContent>
+          </Popover>
+          <AudioRecorder
+            disabled={waiting}
+            onRecorded={(dataUrl, mime) => {
+              setUploading({ label: "Enviando áudio..." });
+              uploadFn({ data: { filename: `audio-${Date.now()}.webm`, contentType: mime, dataUrl } })
+                .then((up) => sendMut.mutate({ mediaUrl: up.url, mediaType: "audio" }))
+                .catch((e) => toast.error("Áudio: " + e.message))
+                .finally(() => setUploading(null));
+            }}
+          />
+          <ContactCardDialog open={contactOpen} onOpenChange={setContactOpen} onSend={sendContactCard} />
           <div className="relative flex-1">
             {slashOpen && slashResults.length > 0 && (
               <div className="absolute bottom-full left-0 right-0 z-20 mb-2 max-h-60 overflow-auto rounded-xl border bg-popover shadow-lg">
