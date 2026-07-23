@@ -237,6 +237,39 @@ if grep -q '^\s*container_name:' docker-compose.yml; then
 fi
 
 # ----------------------------------------------------------------------------
+# docker-compose.override.yml (Traefik/EasyPanel)
+# ----------------------------------------------------------------------------
+if [[ "$USE_TRAEFIK" == "y" ]]; then
+  section "[5b/7] Gerando docker-compose.override.yml com labels do Traefik"
+  if ! docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1; then
+    echo "  aviso: rede docker '$TRAEFIK_NETWORK' não existe. Confira o nome no EasyPanel"
+    echo "         (docker network ls). Vou gerar o override mesmo assim; ajuste depois se precisar."
+  fi
+  ROUTER="supabase_${PROJECT}"
+  cat > docker-compose.override.yml <<YAML
+services:
+  kong:
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK}"
+      - "traefik.http.routers.${ROUTER}.rule=Host(\`${TRAEFIK_HOST}\`)"
+      - "traefik.http.routers.${ROUTER}.entrypoints=${TRAEFIK_ENTRYPOINT}"
+      - "traefik.http.routers.${ROUTER}.tls=true"
+      - "traefik.http.routers.${ROUTER}.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
+      - "traefik.http.services.${ROUTER}.loadbalancer.server.port=8000"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK}
+YAML
+  echo "  override escrito. Kong será publicado em https://${TRAEFIK_HOST}"
+fi
+
+# ----------------------------------------------------------------------------
 # sobe stack
 # ----------------------------------------------------------------------------
 section "[6/7] Subindo stack (pode levar ~2min)"
