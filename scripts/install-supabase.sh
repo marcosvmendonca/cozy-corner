@@ -225,7 +225,14 @@ grep -q '^ENABLE_EMAIL_AUTOCONFIRM=' .env \
   && sedi ENABLE_EMAIL_AUTOCONFIRM true \
   || echo "ENABLE_EMAIL_AUTOCONFIRM=true" >> .env
 
+# CRÍTICO: remove COMPOSE_FILE do .env se existir. Se ele estiver setado,
+# `docker compose` ignora o docker-compose.override.yml e as labels do Traefik
+# nunca são aplicadas (Kong fica isolado na rede default do projeto).
+sed -i '/^COMPOSE_FILE=/d' .env
+
 export COMPOSE_PROJECT_NAME="supabase_${PROJECT}"
+sed -i '/^COMPOSE_PROJECT_NAME=/d' .env
+echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" >> .env
 echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" > .compose-env
 
 # Remove `container_name:` fixos do compose (senão colide com outros projetos
