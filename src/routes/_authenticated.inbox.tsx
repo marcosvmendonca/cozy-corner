@@ -893,16 +893,26 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           </div>
         ) : (
           <>
-            {m.type === "sticker" && m.media_url && <img src={m.media_url} alt="sticker" className="max-h-40 max-w-[160px]" />}
-            {m.type === "image" && m.media_url && <img src={m.media_url} alt="" className="mb-1 max-h-64 rounded-lg" />}
+            {m.type === "sticker" && m.media_url && (
+              <div className="relative">
+                <img src={m.media_url} alt="sticker" className="max-h-40 max-w-[160px]" />
+                {m.status === "pending" && <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30"><Loader2 className="h-5 w-5 animate-spin text-white" /></div>}
+              </div>
+            )}
+            {m.type === "image" && m.media_url && (
+              <div className="relative mb-1">
+                <img src={m.media_url} alt="" className={cn("max-h-64 rounded-lg", m.status === "pending" && "opacity-70")} />
+                {m.status === "pending" && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30">
+                    <Loader2 className="h-6 w-6 animate-spin text-white" />
+                  </div>
+                )}
+              </div>
+            )}
             {m.type === "audio" && m.media_url && <audio src={m.media_url} controls className="mb-1 max-w-full" />}
             {m.type === "video" && m.media_url && <video src={m.media_url} controls className="mb-1 max-h-64 rounded-lg" />}
-            {m.type === "document" && m.media_url && (
-              <a href={m.media_url} target="_blank" rel="noreferrer" className="mb-1 flex items-center gap-2 rounded-lg bg-black/10 p-2 text-xs">
-                <FileText className="h-4 w-4" /> Documento
-              </a>
-            )}
-            {m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>}
+            {m.type === "document" && m.media_url && <DocumentAttachment url={m.media_url} name={m.body ?? "documento"} pending={m.status === "pending"} />}
+            {m.body && m.type !== "document" && <div className="whitespace-pre-wrap break-words">{m.body}</div>}
           </>
         )}
         {!deleted && !editing && (
