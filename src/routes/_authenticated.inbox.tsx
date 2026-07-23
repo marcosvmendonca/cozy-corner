@@ -875,10 +875,10 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           </>
         )}
         {!deleted && !editing && (
-          <div className={cn("mt-1 text-[10px] opacity-60", out ? "text-right" : "")}>
-            {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            {edited && " · editada"}
-            {out && m.status && ` · ${m.status === "sent" ? "✓" : m.status === "failed" ? "!" : "…"}`}
+          <div className={cn("mt-1 flex items-center gap-1 text-[10px] opacity-70", out ? "justify-end" : "")}>
+            <span>{new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+            {edited && <span>· editada</span>}
+            {out && <MessageStatusIcon status={m.status} />}
           </div>
         )}
       </div>
