@@ -486,10 +486,10 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
     catch (e: any) { toast.error("IA: " + e.message); }
     finally { setSuggesting(false); }
   }
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>, forceType?: "image" | "video" | "document") {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>, forceType?: "image" | "video" | "document" | "sticker") {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
-    const label = forceType ?? (file.type.startsWith("image/") ? "imagem" : file.type.startsWith("video/") ? "vídeo" : "documento");
+    const label = forceType === "sticker" ? "figurinha" : (forceType ?? (file.type.startsWith("image/") ? "imagem" : file.type.startsWith("video/") ? "vídeo" : "documento"));
     setUploading({ label: `Enviando ${label}...` });
     const reader = new FileReader();
     reader.onload = async () => {
