@@ -98,21 +98,36 @@ O script também remove `container_name:` fixos do `docker-compose.yml` (ex: `su
 
 ## Após a instalação
 
-### 1. Expor Kong via EasyPanel (HTTPS)
+### 1. Publicar o Kong via Traefik
 
-Sem esse passo o Supabase só responde em `http://IP:<KONG_HTTP>`.
+O wizard já faz isso automaticamente quando você responde `y` em **"Publicar Kong via Traefik?"** e informa a rede do Traefik do EasyPanel. Ele gera um `docker-compose.override.yml` na pasta do projeto com:
 
-1. EasyPanel → seu Project → **+ Service → App**.
-2. Nome: `supabase-<slug>-proxy` (só um placeholder).
-3. **Domain** → adicione `api-<slug>.seudominio.com` → **HTTPS** + **Let's Encrypt**.
-4. **Proxy port** = a porta que você escolheu em `KONG_HTTP` (ex: `8100`).
-5. Salvar. Em ~1min o Traefik emite o cert e o subdomínio responde.
+- labels `traefik.http.routers.*` roteando o host informado para o serviço `kong` na porta interna `8000`;
+- entrypoint HTTPS (`websecure` por padrão) + cert resolver Let's Encrypt (`letsencrypt` por padrão);
+- rede externa `${TRAEFIK_NETWORK}` anexada ao container do Kong.
 
-Teste:
+**Não precisa criar um App/proxy no EasyPanel** — o Traefik do EasyPanel descobre o container pelas labels e emite o cert automaticamente no primeiro acesso HTTPS.
+
+Antes de rodar o wizard, confira o nome da rede do Traefik:
+
+```bash
+docker network ls | grep -i traefik
+# geralmente: easypanel-traefik
+```
+
+E garanta que o DNS `A` do subdomínio já aponta pra VPS — sem isso o Let's Encrypt falha.
+
+Teste depois de subir:
 ```bash
 curl -i https://api-<slug>.seudominio.com/rest/v1/
 # esperado: HTTP/2 401 (sem apikey — significa que o Kong está atendendo)
 ```
+
+**Se preferir publicar manualmente** (respondeu `n` no wizard, ou não usa EasyPanel):
+1. EasyPanel → Project → **+ Service → App** com **Proxy port** = `KONG_HTTP` do wizard (ex: `8100`), **Domain** com HTTPS + Let's Encrypt.
+2. Ou configure seu próprio reverse proxy apontando para `http://<host>:<KONG_HTTP>`.
+
+**Editar/adicionar Traefik depois:** basta criar/editar `docker-compose.override.yml` no diretório do projeto seguindo o mesmo formato e rodar `docker compose --project-name supabase_<slug> up -d`.
 
 ### 2. Atualizar `.env` com o domínio público
 
