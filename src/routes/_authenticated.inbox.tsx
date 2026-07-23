@@ -497,15 +497,21 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>, forceType?: "image" | "video" | "document" | "sticker") {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
-    const label = forceType === "sticker" ? "figurinha" : (forceType ?? (file.type.startsWith("image/") ? "imagem" : file.type.startsWith("video/") ? "vídeo" : "documento"));
+    const mediaType = forceType ?? (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document");
+    const label = mediaType === "sticker" ? "figurinha" : mediaType === "image" ? "imagem" : mediaType === "video" ? "vídeo" : mediaType === "audio" ? "áudio" : "documento";
     setUploading({ label: `Enviando ${label}...` });
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       try {
         const up = await uploadFn({ data: { filename: file.name, contentType: file.type, dataUrl } });
-        const mediaType = forceType ?? (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "document");
-        sendMut.mutate({ mediaUrl: up.url, mediaType: mediaType as any, fileName: file.name });
+        sendMut.mutate({
+          mediaUrl: up.url,
+          mediaType: mediaType as any,
+          fileName: file.name,
+          text: mediaType === "document" ? file.name : undefined,
+          previewUrl: mediaType === "image" || mediaType === "sticker" ? dataUrl : undefined,
+        });
       } catch (err: any) { toast.error("Upload: " + err.message); }
       finally { setUploading(null); }
     };
