@@ -41,8 +41,12 @@ Ou clone o repo e rode direto: `sudo bash scripts/install-supabase.sh`.
 | **URL do repositório GitHub** | Repo com migrations. Deixe em branco pra pular. Aceita `https://…git` ou `git@github.com:…`. | `https://github.com/user/crm.git` |
 | **Branch** | Branch do repo. | `main` |
 | **Subpasta com .sql** | Onde ficam as migrations dentro do repo. | `supabase/migrations` |
-| **URL pública da API** | O que vai virar `API_EXTERNAL_URL` / `SUPABASE_PUBLIC_URL`. Se ainda não tem domínio, deixa localhost e edita depois. | `https://api-crm2.seudominio.com` |
+| **URL pública da API** | Vira `API_EXTERNAL_URL` / `SUPABASE_PUBLIC_URL`. Use `https://...` para ativar a integração automática com Traefik. | `https://api-crm2.seudominio.com` |
 | **SITE_URL** | URL do frontend (usada em redirects do Auth). | `https://crm2.seudominio.com` |
+| **Publicar Kong via Traefik?** | Se sim, o script gera `docker-compose.override.yml` com labels do Traefik e conecta o Kong à rede do EasyPanel — não precisa criar App proxy no EasyPanel. | `y` |
+| **Rede Traefik do EasyPanel** | Nome da rede docker externa onde o Traefik do EasyPanel escuta. Confira com `docker network ls`. | `easypanel-traefik` |
+| **Entrypoint HTTPS** | Nome do entrypoint HTTPS no Traefik. | `websecure` |
+| **Cert resolver** | Nome do resolver Let's Encrypt configurado no Traefik do EasyPanel. | `letsencrypt` |
 
 ---
 
