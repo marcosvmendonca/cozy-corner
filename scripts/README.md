@@ -225,7 +225,9 @@ docker exec -it supabase_<slug>-db-1 psql -U postgres
 
 **`container name "/supabase-xxx" is already in use`** — o compose oficial tem `container_name:` fixo. O wizard remove automaticamente; se você editou o compose depois, rode: `sed -i '/^\s*container_name:/d' /opt/supabase-<slug>/docker-compose.yml`.
 
-**Studio não abre / erro 502 no domínio** — confira se o EasyPanel App está apontando pra porta correta (`KONG_HTTP`) e se o container do Kong está `healthy` (`docker compose … ps`).
+**Studio não abre / erro 502 no domínio** — confira se o container do Kong está `healthy` (`docker compose … ps`) e, se estiver usando Traefik via override, se o Kong está na rede correta (`docker inspect supabase_<slug>-kong-1 | grep -A2 Networks`). O nome tem que bater com `TRAEFIK_NETWORK`.
+
+**Traefik não emite cert / `404 page not found`** — normalmente é rede errada ou DNS não propagou. Cheque: `docker network ls | grep traefik` (nome exato), DNS A do subdomínio → IP da VPS (`dig +short api-<slug>.seudominio.com`), e logs do Traefik do EasyPanel. Se mudar o nome da rede, edite `docker-compose.override.yml` e rode `docker compose --project-name supabase_<slug> up -d`.
 
 **Signup falha com "Database error saving new user"** — falta migration do `handle_new_user` trigger. Aplique as migrations do repo (passo acima).
 
