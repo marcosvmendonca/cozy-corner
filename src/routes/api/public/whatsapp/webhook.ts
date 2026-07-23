@@ -49,11 +49,12 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
             const msg = raw?.message ?? {};
             const pushName: string | undefined = raw?.pushName;
 
-            let type: "text" | "image" | "audio" | "video" | "document" = "text";
+            let type: "text" | "image" | "audio" | "video" | "document" | "sticker" = "text";
             let body: string | null = null;
             let mediaUrl: string | null = null;
             if (msg.conversation) { body = msg.conversation; }
             else if (msg.extendedTextMessage?.text) { body = msg.extendedTextMessage.text; }
+            else if (msg.stickerMessage) { type = "sticker"; mediaUrl = msg.stickerMessage.url ?? null; }
             else if (msg.imageMessage) { type = "image"; body = msg.imageMessage.caption ?? null; mediaUrl = msg.imageMessage.url ?? null; }
             else if (msg.audioMessage) { type = "audio"; mediaUrl = msg.audioMessage.url ?? null; }
             else if (msg.videoMessage) { type = "video"; body = msg.videoMessage.caption ?? null; mediaUrl = msg.videoMessage.url ?? null; }
