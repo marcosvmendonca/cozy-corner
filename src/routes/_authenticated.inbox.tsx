@@ -362,6 +362,8 @@ function ChatThread({ conv, me, queues, contextOpen, onToggleContext }: {
       if (error) throw error;
       return (data ?? []) as any;
     },
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
 
   const [text, setText] = useState("");
