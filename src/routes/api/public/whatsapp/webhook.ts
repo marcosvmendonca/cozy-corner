@@ -37,6 +37,25 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
           return jsonOk();
         }
 
+        // Message edits — Evolution emits either "messages.edited" or a protocolMessage inside upsert
+        if (event === "messages.edited" || event === "messages_edited" || event === "messages.edit") {
+          const items = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
+          for (const raw of items) {
+            const editedId = raw?.key?.id ?? raw?.editedMessageId ?? raw?.message?.protocolMessage?.key?.id ?? null;
+            const newText: string | null =
+              raw?.message?.editedMessage?.message?.conversation ??
+              raw?.message?.editedMessage?.message?.extendedTextMessage?.text ??
+              raw?.message?.protocolMessage?.editedMessage?.conversation ??
+              raw?.message?.protocolMessage?.editedMessage?.extendedTextMessage?.text ??
+              raw?.editedText ?? raw?.text ?? null;
+            if (!editedId || !newText) continue;
+            await supabaseAdmin.from("messages")
+              .update({ body: newText, edited_at: new Date().toISOString() })
+              .eq("external_id", editedId);
+          }
+          return jsonOk();
+        }
+
         if (event === "messages.upsert" || event === "messages_upsert") {
           const items = Array.isArray(payload?.data) ? payload.data : [payload?.data].filter(Boolean);
           for (const raw of items) {
@@ -48,6 +67,24 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
 
             const msg = raw?.message ?? {};
             const pushName: string | undefined = raw?.pushName;
+
+            // Edit arriving as protocolMessage inside upsert
+            const proto = msg?.protocolMessage;
+            if (proto?.editedMessage || proto?.type === 14 || proto?.type === "MESSAGE_EDIT") {
+              const editedId = proto?.key?.id;
+              const newText: string | null =
+                proto?.editedMessage?.conversation ??
+                proto?.editedMessage?.extendedTextMessage?.text ??
+                proto?.editedMessage?.message?.conversation ??
+                proto?.editedMessage?.message?.extendedTextMessage?.text ?? null;
+              if (editedId && newText) {
+                await supabaseAdmin.from("messages")
+                  .update({ body: newText, edited_at: new Date().toISOString() })
+                  .eq("external_id", editedId);
+              }
+              continue;
+            }
+
 
             let type: "text" | "image" | "audio" | "video" | "document" | "sticker" = "text";
             let body: string | null = null;
