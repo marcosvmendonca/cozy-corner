@@ -874,6 +874,7 @@ function MessageBubble({ m, currentConversationId }: { m: Message; currentConver
           </div>
         ) : (
           <>
+            {m.type === "sticker" && m.media_url && <img src={m.media_url} alt="sticker" className="max-h-40 max-w-[160px]" />}
             {m.type === "image" && m.media_url && <img src={m.media_url} alt="" className="mb-1 max-h-64 rounded-lg" />}
             {m.type === "audio" && m.media_url && <audio src={m.media_url} controls className="mb-1 max-w-full" />}
             {m.type === "video" && m.media_url && <video src={m.media_url} controls className="mb-1 max-h-64 rounded-lg" />}
