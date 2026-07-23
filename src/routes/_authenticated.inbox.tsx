@@ -34,6 +34,15 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
+function MessageStatusIcon({ status }: { status: string | null }) {
+  if (!status || status === "pending") return <Clock className="h-3 w-3 opacity-70" />;
+  if (status === "failed") return <AlertCircle className="h-3 w-3 text-destructive" />;
+  if (status === "read") return <CheckCheck className="h-3 w-3 text-sky-400" />;
+  if (status === "delivered") return <CheckCheck className="h-3 w-3 opacity-80" />;
+  // sent / server ack / anything else
+  return <Check className="h-3 w-3 opacity-80" />;
+}
+
 type Conversation = Tables<"conversations"> & { contacts: Tables<"contacts"> };
 type Message = Tables<"messages">;
 
