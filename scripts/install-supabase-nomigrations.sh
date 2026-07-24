@@ -70,19 +70,10 @@ POSTGRES_PORT_HOST=$(ask "Porta do Postgres no host (supavisor session)"     "55
 POOLER_PORT_HOST=$(ask   "Porta do pooler no host (supavisor transaction)"   "6643")
 ANALYTICS_PORT_HOST=$(ask "Porta do analytics/logflare no host"              "4100")
 
-echo
-echo "Se você tem um repo GitHub com migrations em supabase/migrations,"
-echo "cole a URL (https://github.com/usuario/repo.git ou git@github.com:...)."
-echo "Deixe em branco pra pular."
-GH_URL=$(ask "URL do repositório GitHub" " ")
-GH_URL="${GH_URL// /}"
-
+GH_URL=""
 GH_BRANCH=""
-GH_SUBDIR="supabase/migrations"
-if [[ -n "$GH_URL" ]]; then
-  GH_BRANCH=$(ask "Branch" "main")
-  GH_SUBDIR=$(ask "Subpasta com os .sql de migration" "supabase/migrations")
-fi
+GH_SUBDIR=""
+
 
 API_URL_DEFAULT="http://localhost:${KONG_HTTP}"
 API_URL=$(ask "URL pública da API (ex: https://api-${PROJECT}.seudominio.com)" "$API_URL_DEFAULT")
