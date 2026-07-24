@@ -286,39 +286,11 @@ for i in {1..60}; do
 done
 
 # ----------------------------------------------------------------------------
-# migrations do GitHub
+# migrations desabilitadas nesta variante
 # ----------------------------------------------------------------------------
-section "[7/7] Aplicando migrations"
-if [[ -n "$GH_URL" ]]; then
-  repo_tmp=$(mktemp -d)
-  echo "  clonando $GH_URL (branch $GH_BRANCH)..."
-  if ! git clone --depth 1 --branch "$GH_BRANCH" "$GH_URL" "$repo_tmp/repo"; then
-    echo "  ERRO ao clonar o repo. pule esta etapa ou rode manualmente depois." >&2
-  else
-    MIG_DIR="$repo_tmp/repo/$GH_SUBDIR"
-    if [[ ! -d "$MIG_DIR" ]]; then
-      echo "  aviso: pasta $GH_SUBDIR não existe no repo. nada foi aplicado."
-    else
-      shopt -s nullglob
-      files=( "$MIG_DIR"/*.sql )
-      if (( ${#files[@]} == 0 )); then
-        echo "  aviso: nenhum .sql em $GH_SUBDIR."
-      else
-        IFS=$'\n' sorted=($(sort <<<"${files[*]}")); unset IFS
-        for f in "${sorted[@]}"; do
-          echo "  -> aplicando $(basename "$f")"
-          if ! docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"; then
-            echo "  ERRO em $(basename "$f"). interrompendo migrations." >&2
-            break
-          fi
-        done
-      fi
-    fi
-    rm -rf "$repo_tmp"
-  fi
-else
-  echo "  (nenhum repo informado — pule)"
-fi
+section "[7/7] Migrations"
+echo "  (variante sem migrations — nenhum .sql aplicado)"
+
 
 # ----------------------------------------------------------------------------
 # resumo final
