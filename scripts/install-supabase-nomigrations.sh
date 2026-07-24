@@ -50,7 +50,7 @@ section() { echo; echo ">>> $*"; }
 # ----------------------------------------------------------------------------
 cat <<'BANNER'
 ===============================================================================
-  Supabase self-hosted — instalador interativo
+  Supabase self-hosted — instalador interativo (sem migrations)
 ===============================================================================
 BANNER
 
