@@ -118,11 +118,8 @@ if [[ "$USE_TRAEFIK" == "y" ]]; then
 else
   echo "  traefik:     (desabilitado — publique o Kong manualmente)"
 fi
-if [[ -n "$GH_URL" ]]; then
-  echo "  github:      $GH_URL ($GH_BRANCH) — migrations em $GH_SUBDIR"
-else
-  echo "  github:      (nenhum — pula migrations)"
-fi
+echo "  github:      (desabilitado nesta variante — sem migrations)"
+
 echo
 ask_yn "Confirma e prossegue?" "y" || { echo "cancelado."; exit 0; }
 
